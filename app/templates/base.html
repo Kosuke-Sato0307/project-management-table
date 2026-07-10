@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}案件管理システム{% endblock %}</title>
+  <!-- CSSは同梱（外部CDNは一切参照しない：完全ローカル運用のため） -->
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
+</head>
+<body>
+  {% if current_user.is_authenticated %}
+  <header class="topbar">
+    <div class="topbar-inner">
+      <a class="brand" href="{{ url_for('main.index') }}">案件管理システム</a>
+      <nav class="nav">
+        <a href="{{ url_for('main.index') }}">ホーム</a>
+        {% if current_user.is_admin %}
+        <a href="{{ url_for('admin.users') }}">ユーザー管理</a>
+        {% endif %}
+      </nav>
+      <div class="user-area">
+        <span class="user-name">{{ current_user.name }}
+          {% if current_user.is_admin %}<span class="badge">管理者</span>{% endif %}
+        </span>
+        <a class="btn btn-sm" href="{{ url_for('auth.change_password') }}">パスワード変更</a>
+        <a class="btn btn-sm btn-outline" href="{{ url_for('auth.logout') }}">ログアウト</a>
+      </div>
+    </div>
+  </header>
+  {% endif %}
+
+  <main class="container">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <div class="flash-area">
+        {% for category, message in messages %}
+          <div class="flash flash-{{ category }}">{{ message }}</div>
+        {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+
+    {% block content %}{% endblock %}
+  </main>
+
+  <footer class="footer">
+    <small>社内利用専用 / 完全ローカル運用</small>
+  </footer>
+</body>
+</html>

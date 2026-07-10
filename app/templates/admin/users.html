@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block title %}ユーザー管理 - 案件管理システム{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1>ユーザー管理</h1>
+  <a class="btn" href="{{ url_for('admin.new_user') }}">＋ ユーザーを登録</a>
+</div>
+
+<div class="table-wrap">
+  <table class="table">
+    <thead>
+      <tr>
+        <th>ログインID</th>
+        <th>氏名</th>
+        <th>権限</th>
+        <th>状態</th>
+        <th>登録日</th>
+        <th>操作</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for u in users %}
+      <tr>
+        <td>{{ u.user_id }}</td>
+        <td>{{ u.name }}</td>
+        <td>
+          <form class="inline-form" method="post" action="{{ url_for('admin.change_role', user_id=u.user_id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <select name="role" onchange="this.form.submit()">
+              <option value="user"  {% if u.role == 'user'  %}selected{% endif %}>一般</option>
+              <option value="admin" {% if u.role == 'admin' %}selected{% endif %}>管理者</option>
+            </select>
+          </form>
+        </td>
+        <td>
+          {% if u.is_active %}
+            <span style="color:var(--success)">有効</span>
+          {% else %}
+            <span class="status-off">無効</span>
+          {% endif %}
+          {% if u.must_change_password %}
+            <span class="badge" style="background:var(--warning)">PW変更待ち</span>
+          {% endif %}
+        </td>
+        <td>{{ u.created_at | jst }}</td>
+        <td>
+          <form class="inline-form" method="post" action="{{ url_for('admin.reset_password', user_id=u.user_id) }}"
+                onsubmit="return confirm('{{ u.name }} のパスワードをリセットしますか？');">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-sm btn-outline">PWリセット</button>
+          </form>
+          {% if u.user_id != current_user.user_id %}
+          <form class="inline-form" method="post" action="{{ url_for('admin.toggle_active', user_id=u.user_id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-sm {% if u.is_active %}btn-danger{% else %}btn-outline{% endif %}">
+              {% if u.is_active %}無効化{% else %}有効化{% endif %}
+            </button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

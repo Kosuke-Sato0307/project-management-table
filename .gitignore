@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+
+# 環境変数（秘密情報）
+.env
+
+# データ（DB本体・アップロード）は成果物なのでコミットしない
+data/*.db
+data/*.sqlite
+data/*.sqlite3
+instance/
+uploads/
+
+# OS
+.DS_Store
+Thumbs.db
