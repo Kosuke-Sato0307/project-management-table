@@ -16,6 +16,11 @@ data/*.sqlite3
 instance/
 uploads/
 
+# TLS証明書・秘密鍵は絶対にコミットしない
+certs/*.crt
+certs/*.key
+certs/*.pem
+
 # OS
 .DS_Store
 Thumbs.db

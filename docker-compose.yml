@@ -1,18 +1,25 @@
 # 案件管理システム: Docker Compose 設定
-# 起動:  docker compose up -d
+# 起動:  docker compose up -d --build
 # 停止:  docker compose down
 services:
   web:
     build: .
-    # 社内LANのみで使う想定。127.0.0.1 に絞ると同一PCのみ、
-    # 社内の他PCからもアクセスさせる場合は "${APP_PORT:-8000}:8000" に変更。
+    # HTTPSで待ち受け。ブラウザからは https://<サーバ>:<HTTPS_PORT> でアクセス。
+    # 既定は443なのでポート番号なしの https://<サーバ> でアクセスできる。
     ports:
-      - "${APP_PORT:-8000}:8000"
+      - "${HTTPS_PORT:-443}:8000"
     environment:
       - SECRET_KEY=${SECRET_KEY:-dev-insecure-key-change-me}
       - TZ=${TZ:-Asia/Tokyo}
       - DATABASE_URL=sqlite:////app/data/app.db
+      # HTTPS運用のためセキュアクッキーを有効化
+      - SESSION_COOKIE_SECURE=1
+      # 自己署名証明書に登録するホスト名/IP（アクセスに使う値をカンマ区切り・空白なしで）
+      # 例: localhost,192.168.1.10,pm-server
+      - CERT_HOSTS=${CERT_HOSTS:-localhost}
     volumes:
       # DB本体（SQLite）を永続化。ここをバックアップすればデータを保全できる。
       - ./data:/app/data
+      # TLS証明書。空なら初回起動時に自己署名を自動生成。社内CAの証明書に差し替えも可。
+      - ./certs:/app/certs
     restart: unless-stopped
