@@ -12,6 +12,9 @@
 
 ---
 
+> **Windowsで初めて動かす方へ**: 画面つきの詳しい手順は
+> [`docs/はじめかた_Windows.md`](docs/はじめかた_Windows.md) を参照してください。
+
 ## 1. 動かすのに必要なもの
 
 - **Docker Desktop**（Windows / Mac）または **Docker Engine**（Linux）
