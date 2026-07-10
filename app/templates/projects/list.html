@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+{% block title %}案件一覧 - 案件管理システム{% endblock %}
+
+{% macro sort_header(col, label) %}
+  {%- set new_dir = 'desc' if (sort == col and direction == 'asc') else 'asc' -%}
+  {%- set a = request.args.to_dict() -%}
+  {%- set _ = a.update({'sort': col, 'dir': new_dir, 'page': 1}) -%}
+  <a href="{{ url_for('projects.list_projects', **a) }}">{{ label }}{% if sort == col %}{{ ' ▲' if direction == 'asc' else ' ▼' }}{% endif %}</a>
+{% endmacro %}
+
+{% block content %}
+<div class="page-header">
+  <h1>案件一覧</h1>
+  <a class="btn" href="{{ url_for('projects.new') }}">＋ 案件を登録</a>
+</div>
+
+<div class="card">
+  <form method="get" action="{{ url_for('projects.list_projects') }}" class="search-form">
+    <div class="search-grid">
+      <div class="form-group">
+        <label>案件番号</label>
+        <input type="text" name="no" value="{{ filters.no or '' }}">
+      </div>
+      <div class="form-group">
+        <label>案件名</label>
+        <input type="text" name="name" value="{{ filters.name or '' }}">
+      </div>
+      <div class="form-group">
+        <label>顧客名</label>
+        <input type="text" name="customer" value="{{ filters.customer or '' }}">
+      </div>
+      <div class="form-group">
+        <label>ステータス</label>
+        <select name="status_id">
+          <option value="">（すべて）</option>
+          {% for s in statuses %}
+          <option value="{{ s.id }}" {% if filters.status_id == s.id %}selected{% endif %}>{{ s.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-group">
+        <label>確度</label>
+        <select name="rank_id">
+          <option value="">（すべて）</option>
+          {% for r in ranks %}
+          <option value="{{ r.id }}" {% if filters.rank_id == r.id %}selected{% endif %}>{{ r.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-group">
+        <label>完成月（から〜まで）</label>
+        <div class="range-row">
+          <input type="month" name="month_from" value="{{ filters.month_from or '' }}">
+          <span>〜</span>
+          <input type="month" name="month_to" value="{{ filters.month_to or '' }}">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>金額(税抜)（円・から〜まで）</label>
+        <div class="range-row">
+          <input type="number" name="amount_min" value="{{ filters.amount_min or '' }}">
+          <span>〜</span>
+          <input type="number" name="amount_max" value="{{ filters.amount_max or '' }}">
+        </div>
+      </div>
+    </div>
+    <div class="search-actions">
+      <button type="submit" class="btn">検索</button>
+      <a class="btn btn-outline" href="{{ url_for('projects.list_projects') }}">条件クリア</a>
+    </div>
+  </form>
+</div>
+
+<p class="text-muted">{{ pagination.total }} 件中 {{ pagination.first if pagination.total else 0 }}〜{{ pagination.last }} 件を表示</p>
+
+<div class="table-wrap">
+  <table class="table">
+    <thead>
+      <tr>
+        <th>{{ sort_header('project_no', '案件番号') }}</th>
+        <th>{{ sort_header('project_name', '案件名') }}</th>
+        <th>{{ sort_header('customer_name', '顧客名') }}</th>
+        <th>ステータス</th>
+        <th>確度</th>
+        <th class="num-col">{{ sort_header('amount_excl_tax', '金額(税抜)') }}</th>
+        <th>{{ sort_header('completion_month', '完成月') }}</th>
+        <th>{{ sort_header('updated_at', '編集日時') }}</th>
+        <th>操作</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for p in projects %}
+      <tr>
+        <td><a href="{{ url_for('projects.detail', project_no=p.project_no) }}">{{ p.project_no }}</a></td>
+        <td>{{ p.project_name }}</td>
+        <td>{{ p.customer_name or '' }}</td>
+        <td>{{ p.status.name if p.status else '' }}</td>
+        <td>{{ p.rank.name if p.rank else '' }}</td>
+        <td class="num-col">{{ p.amount_excl_tax | yen }}</td>
+        <td>{{ p.completion_month or '' }}</td>
+        <td>{{ p.updated_at | jst }}</td>
+        <td class="nowrap">
+          <a class="btn btn-sm btn-outline" href="{{ url_for('projects.edit', project_no=p.project_no) }}">編集</a>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="9" class="text-muted" style="text-align:center; padding:24px;">該当する案件がありません。</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% if pagination.pages > 1 %}
+<div class="pagination">
+  {% if pagination.has_prev %}
+    {%- set a = request.args.to_dict() -%}{%- set _ = a.update({'page': pagination.prev_num}) -%}
+    <a class="btn btn-sm btn-outline" href="{{ url_for('projects.list_projects', **a) }}">← 前へ</a>
+  {% endif %}
+  <span class="page-info">{{ pagination.page }} / {{ pagination.pages }} ページ</span>
+  {% if pagination.has_next %}
+    {%- set a = request.args.to_dict() -%}{%- set _ = a.update({'page': pagination.next_num}) -%}
+    <a class="btn btn-sm btn-outline" href="{{ url_for('projects.list_projects', **a) }}">次へ →</a>
+  {% endif %}
+</div>
+{% endif %}
+{% endblock %}

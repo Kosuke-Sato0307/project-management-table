@@ -11,7 +11,7 @@ from flask import (Blueprint, render_template, request, redirect, url_for,
 from flask_login import current_user
 
 from ..extensions import db
-from ..models import User
+from ..models import User, Status, Rank
 from ..decorators import admin_required
 
 admin_bp = Blueprint("admin", __name__, url_prefix="/admin")
@@ -121,3 +121,119 @@ def change_role(user_id):
     db.session.commit()
     flash(f"'{user.name}' の権限を変更しました。", "info")
     return redirect(url_for("admin.users"))
+
+
+# ============ マスタ管理: 案件ステータス ============
+@admin_bp.route("/statuses")
+@admin_required
+def statuses():
+    items = Status.query.order_by(Status.sort_order, Status.id).all()
+    return render_template("admin/statuses.html", items=items)
+
+
+@admin_bp.route("/statuses/new", methods=["POST"])
+@admin_required
+def new_status():
+    name = (request.form.get("name") or "").strip()
+    sort_order = request.form.get("sort_order", type=int) or 0
+    if not name:
+        flash("名称を入力してください。", "danger")
+    elif Status.query.filter_by(name=name).first():
+        flash(f"'{name}' は既に存在します。", "danger")
+    else:
+        db.session.add(Status(name=name, sort_order=sort_order))
+        db.session.commit()
+        flash(f"ステータス '{name}' を追加しました。", "success")
+    return redirect(url_for("admin.statuses"))
+
+
+@admin_bp.route("/statuses/<int:item_id>/edit", methods=["POST"])
+@admin_required
+def edit_status(item_id):
+    item = db.session.get(Status, item_id)
+    if item is None:
+        flash("対象が見つかりません。", "danger")
+        return redirect(url_for("admin.statuses"))
+    name = (request.form.get("name") or "").strip()
+    if not name:
+        flash("名称を入力してください。", "danger")
+        return redirect(url_for("admin.statuses"))
+    dup = Status.query.filter_by(name=name).first()
+    if dup and dup.id != item.id:
+        flash(f"'{name}' は既に存在します。", "danger")
+        return redirect(url_for("admin.statuses"))
+    item.name = name
+    item.sort_order = request.form.get("sort_order", type=int) or 0
+    db.session.commit()
+    flash("ステータスを更新しました。", "success")
+    return redirect(url_for("admin.statuses"))
+
+
+@admin_bp.route("/statuses/<int:item_id>/toggle", methods=["POST"])
+@admin_required
+def toggle_status(item_id):
+    item = db.session.get(Status, item_id)
+    if item:
+        item.is_active = not item.is_active
+        db.session.commit()
+        flash("表示/非表示を切り替えました。", "info")
+    return redirect(url_for("admin.statuses"))
+
+
+# ============ マスタ管理: 確度ランク ============
+@admin_bp.route("/ranks")
+@admin_required
+def ranks():
+    items = Rank.query.order_by(Rank.sort_order, Rank.id).all()
+    return render_template("admin/ranks.html", items=items)
+
+
+@admin_bp.route("/ranks/new", methods=["POST"])
+@admin_required
+def new_rank():
+    name = (request.form.get("name") or "").strip()
+    note = (request.form.get("note") or "").strip() or None
+    sort_order = request.form.get("sort_order", type=int) or 0
+    if not name:
+        flash("名称を入力してください。", "danger")
+    elif Rank.query.filter_by(name=name).first():
+        flash(f"'{name}' は既に存在します。", "danger")
+    else:
+        db.session.add(Rank(name=name, note=note, sort_order=sort_order))
+        db.session.commit()
+        flash(f"確度ランク '{name}' を追加しました。", "success")
+    return redirect(url_for("admin.ranks"))
+
+
+@admin_bp.route("/ranks/<int:item_id>/edit", methods=["POST"])
+@admin_required
+def edit_rank(item_id):
+    item = db.session.get(Rank, item_id)
+    if item is None:
+        flash("対象が見つかりません。", "danger")
+        return redirect(url_for("admin.ranks"))
+    name = (request.form.get("name") or "").strip()
+    if not name:
+        flash("名称を入力してください。", "danger")
+        return redirect(url_for("admin.ranks"))
+    dup = Rank.query.filter_by(name=name).first()
+    if dup and dup.id != item.id:
+        flash(f"'{name}' は既に存在します。", "danger")
+        return redirect(url_for("admin.ranks"))
+    item.name = name
+    item.note = (request.form.get("note") or "").strip() or None
+    item.sort_order = request.form.get("sort_order", type=int) or 0
+    db.session.commit()
+    flash("確度ランクを更新しました。", "success")
+    return redirect(url_for("admin.ranks"))
+
+
+@admin_bp.route("/ranks/<int:item_id>/toggle", methods=["POST"])
+@admin_required
+def toggle_rank(item_id):
+    item = db.session.get(Rank, item_id)
+    if item:
+        item.is_active = not item.is_active
+        db.session.commit()
+        flash("表示/非表示を切り替えました。", "info")
+    return redirect(url_for("admin.ranks"))

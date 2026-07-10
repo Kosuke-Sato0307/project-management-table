@@ -14,8 +14,10 @@
       <a class="brand" href="{{ url_for('main.index') }}">案件管理システム</a>
       <nav class="nav">
         <a href="{{ url_for('main.index') }}">ホーム</a>
+        <a href="{{ url_for('projects.list_projects') }}">案件一覧</a>
         {% if current_user.is_admin %}
         <a href="{{ url_for('admin.users') }}">ユーザー管理</a>
+        <a href="{{ url_for('admin.statuses') }}">マスタ管理</a>
         {% endif %}
       </nav>
       <div class="user-area">

@@ -128,3 +128,40 @@ input:focus, select:focus, textarea:focus {
 .stat .num { font-size: 32px; font-weight: 700; color: var(--primary); }
 .stat .label { color: var(--muted); font-size: 14px; }
 .status-off { color: var(--muted); }
+.nowrap { white-space: nowrap; }
+.num-col { text-align: right; }
+td.num-col { font-variant-numeric: tabular-nums; }
+
+/* 検索フォーム */
+.search-grid {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px;
+}
+.search-grid .form-group { margin-bottom: 0; }
+.range-row { display: flex; align-items: center; gap: 6px; }
+.range-row input { width: 100%; }
+.search-actions { margin-top: 16px; display: flex; gap: 8px; }
+
+/* ページング */
+.pagination { display: flex; align-items: center; gap: 12px; justify-content: center; margin: 16px 0; }
+.page-info { color: var(--muted); font-size: 14px; }
+
+/* 詳細テーブル */
+.detail-table { width: 100%; border-collapse: collapse; }
+.detail-table th, .detail-table td { padding: 10px 12px; border-bottom: 1px solid var(--border); text-align: left; vertical-align: top; }
+.detail-table th { width: 160px; background: #f9fafb; font-weight: 600; white-space: nowrap; }
+.detail-table td.pre { white-space: pre-wrap; }
+
+/* 案件フォーム */
+.form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; margin-bottom: 16px; }
+
+/* タブ */
+.tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin-bottom: 16px; }
+.tab { padding: 8px 16px; color: var(--muted); border: 1px solid transparent; border-bottom: none; border-radius: 6px 6px 0 0; }
+.tab:hover { text-decoration: none; background: #f9fafb; }
+.tab.active { color: var(--text); background: #fff; border-color: var(--border); font-weight: 600; margin-bottom: -1px; }
+
+/* マスタ管理の行 */
+.master-row { display: flex; align-items: center; gap: 8px; flex: 1; }
+.master-item { display: flex; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--border); }
+.master-item:last-child { border-bottom: none; }
+.state-label { font-size: 13px; white-space: nowrap; }

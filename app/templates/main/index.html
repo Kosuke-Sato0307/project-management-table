@@ -19,11 +19,14 @@
 </div>
 
 <div class="card" style="margin-top:16px;">
-  <h2>これから使える機能</h2>
-  <p class="text-muted">
-    現在は「フェーズ1: 基盤＋ログイン／ユーザー管理」まで実装済みです。<br>
-    次のフェーズで、案件の一覧・検索・登録・編集、エクスポート（CSV/Excel/PDF）、
-    インポート（Excel/CSV）を追加していきます。
+  <h2>案件管理</h2>
+  <p>
+    <a class="btn" href="{{ url_for('projects.list_projects') }}">案件一覧を開く</a>
+    <a class="btn btn-outline" href="{{ url_for('projects.new') }}">＋ 案件を登録</a>
+  </p>
+  <p class="text-muted" style="margin-top:12px;">
+    現在「フェーズ2: 案件の一覧・検索・登録・編集」まで実装済みです。<br>
+    次のフェーズで、エクスポート（CSV/Excel/PDF）とインポート（Excel/CSV）を追加します。
   </p>
 </div>
 {% endblock %}

@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+{% block title %}{{ '案件登録' if mode == 'new' else '案件編集' }} - 案件管理システム{% endblock %}
+
+{%- macro val(name) -%}
+  {%- if form is not none -%}{{ form.get(name, '') }}
+  {%- elif project -%}{% set x = project[name] %}{{ x if x is not none else '' }}
+  {%- endif -%}
+{%- endmacro -%}
+
+{%- macro cur_fk(name) -%}
+  {%- if form is not none -%}{{ form.get(name, '') }}
+  {%- elif project -%}{% set x = project[name] %}{{ x if x is not none else '' }}
+  {%- endif -%}
+{%- endmacro -%}
+
+{% block content %}
+<div class="page-header">
+  <h1>{{ '案件登録' if mode == 'new' else '案件編集' }}</h1>
+  <a class="btn btn-outline btn-sm"
+     href="{{ url_for('projects.list_projects') if mode == 'new' else url_for('projects.detail', project_no=project.project_no) }}">← 戻る</a>
+</div>
+
+<div class="card">
+  <form method="post"
+        action="{{ url_for('projects.new') if mode == 'new' else url_for('projects.edit', project_no=project.project_no) }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+    <div class="form-grid">
+      <div class="form-group">
+        <label>案件番号 <span class="text-danger">*</span></label>
+        {% if mode == 'new' %}
+          <input type="text" name="project_no" value="{{ val('project_no') }}" required>
+          <div class="help-text">登録後は変更できません（主キー）。</div>
+        {% else %}
+          <input type="text" value="{{ project.project_no }}" disabled>
+          <div class="help-text">案件番号は変更できません。</div>
+        {% endif %}
+      </div>
+      <div class="form-group">
+        <label>案件名 <span class="text-danger">*</span></label>
+        <input type="text" name="project_name" value="{{ val('project_name') }}" required>
+      </div>
+      <div class="form-group">
+        <label>顧客名/取引先</label>
+        <input type="text" name="customer_name" value="{{ val('customer_name') }}">
+      </div>
+      <div class="form-group">
+        <label>ステータス</label>
+        {% set c = cur_fk('status_id') %}
+        <select name="status_id">
+          <option value="">（未設定）</option>
+          {% for s in statuses %}
+          <option value="{{ s.id }}" {% if c|string == s.id|string %}selected{% endif %}>{{ s.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-group">
+        <label>確度</label>
+        {% set cr = cur_fk('rank_id') %}
+        <select name="rank_id">
+          <option value="">（未設定）</option>
+          {% for r in ranks %}
+          <option value="{{ r.id }}" {% if cr|string == r.id|string %}selected{% endif %}>{{ r.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-group">
+        <label>見積番号</label>
+        <input type="text" name="estimate_no" value="{{ val('estimate_no') }}">
+      </div>
+      <div class="form-group">
+        <label>金額(税抜)（円）</label>
+        <input type="number" name="amount_excl_tax" value="{{ val('amount_excl_tax') }}" min="0" step="1">
+      </div>
+      <div class="form-group">
+        <label>完成月</label>
+        <input type="month" name="completion_month" value="{{ val('completion_month') }}">
+      </div>
+      <div class="form-group">
+        <label>受注日</label>
+        <input type="date" name="order_date" value="{{ val('order_date') }}">
+      </div>
+      <div class="form-group">
+        <label>保守開始日</label>
+        <input type="date" name="maintenance_start" value="{{ val('maintenance_start') }}">
+      </div>
+      <div class="form-group">
+        <label>保守終了日</label>
+        <input type="date" name="maintenance_end" value="{{ val('maintenance_end') }}">
+      </div>
+      <div class="form-group">
+        <label>営業担当者</label>
+        <input type="text" name="sales_rep" value="{{ val('sales_rep') }}">
+      </div>
+      <div class="form-group">
+        <label>部署</label>
+        <input type="text" name="department" value="{{ val('department') }}">
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label>備考メモ</label>
+      <textarea name="notes" rows="3">{{ val('notes') }}</textarea>
+    </div>
+
+    <button type="submit" class="btn">{{ '登録する' if mode == 'new' else '更新する' }}</button>
+  </form>
+</div>
+{% endblock %}
