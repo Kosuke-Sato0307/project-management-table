@@ -23,8 +23,6 @@ COLUMNS = [
     ("金額(税抜)", "amount_excl_tax", "int"),
     ("完成月", "completion_month", "month"),
     ("受注日", "order_date", "date"),
-    ("保守開始日", "maintenance_start", "date"),
-    ("保守終了日", "maintenance_end", "date"),
     ("営業担当者", "sales_rep", "text"),
     ("部署", "department", "text"),
     ("備考メモ", "notes", "text"),

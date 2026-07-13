@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{% block title %}案件管理システム{% endblock %}</title>
-  <!-- CSSは同梱（外部CDNは一切参照しない：完全ローカル運用のため） -->
+  <!-- CSSは同梱（外部CDNは一切参照しない） -->
   <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
   <script src="{{ url_for('static', filename='js/app.js') }}" defer></script>
 </head>
@@ -19,7 +19,6 @@
         <a href="{{ url_for('imports.upload_page') }}">インポート</a>
         {% if current_user.is_admin %}
         <a href="{{ url_for('admin.users') }}">ユーザー管理</a>
-        <a href="{{ url_for('admin.statuses') }}">マスタ管理</a>
         {% endif %}
       </nav>
       <div class="user-area">
@@ -47,8 +46,6 @@
     {% block content %}{% endblock %}
   </main>
 
-  <footer class="footer">
-    <small>社内利用専用 / 完全ローカル運用</small>
-  </footer>
+  <footer class="footer"></footer>
 </body>
 </html>

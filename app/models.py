@@ -113,8 +113,6 @@ class Project(db.Model):
     amount_excl_tax = db.Column(db.Integer, nullable=True)          # 金額(税抜) 円
     completion_month = db.Column(db.String(7), nullable=True)       # 完成月 YYYY-MM
     order_date = db.Column(db.Date, nullable=True)                  # 受注日
-    maintenance_start = db.Column(db.Date, nullable=True)           # 保守開始日
-    maintenance_end = db.Column(db.Date, nullable=True)             # 保守終了日
     sales_rep = db.Column(db.String(128), nullable=True)           # 営業担当者
     department = db.Column(db.String(128), nullable=True)          # 部署
     notes = db.Column(db.Text, nullable=True)                      # 備考メモ

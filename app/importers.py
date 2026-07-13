@@ -18,8 +18,6 @@ IMPORT_COLUMNS = [
     ("金額(税抜)", "amount_excl_tax", "int", False),
     ("完成月", "completion_month", "month", False),
     ("受注日", "order_date", "date", False),
-    ("保守開始日", "maintenance_start", "date", False),
-    ("保守終了日", "maintenance_end", "date", False),
     ("営業担当者", "sales_rep", "text", False),
     ("部署", "department", "department", False),
     ("備考メモ", "notes", "text", False),
@@ -262,12 +260,6 @@ def validate(headers, data_rows, existing_nos, status_map, rank_map, dept_map=No
             else:
                 seen_nos[no] = row_no
 
-        # 保守期間の前後
-        ms, me = data.get("maintenance_start"), data.get("maintenance_end")
-        if ms and me and ms > me:
-            errors.append(f"{row_no}行目: 保守終了日が保守開始日より前になっています。")
-            row_ok = False
-
         if row_ok:
             action = "update" if no in existing_nos else "new"
             results.append(RowResult(row_no, data, action))
@@ -299,6 +291,19 @@ def template_xlsx(status_names=None, rank_names=None, dept_names=None) -> bytes:
         cell.fill = fill
     for i, h in enumerate(TEMPLATE_HEADERS, 1):
         ws.column_dimensions[get_column_letter(i)].width = max(12, len(h) * 2 + 2)
+
+    # 入力時の表示崩れを防ぐため、列ごとにセル書式（number_format）を 2〜1000 行へ設定する。
+    #   金額(税抜): #,##0 → 500000 を 500,000 と桁区切り表示
+    #   完成月    : @（テキスト）→ 2026/7 が Excel で Jul-26 に自動変換されるのを防ぐ
+    cell_formats = {"int": "#,##0", "month": "@"}
+    for idx, (_, _, kind, _) in enumerate(IMPORT_COLUMNS, start=1):
+        fmt = cell_formats.get(kind)
+        if not fmt:
+            continue
+        letter = get_column_letter(idx)
+        for row in ws[f"{letter}2:{letter}1000"]:
+            for cell in row:
+                cell.number_format = fmt
 
     # ドロップダウン（データ入力規則）を該当列の 2〜1000 行に設定
     choices = {

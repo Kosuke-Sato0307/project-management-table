@@ -31,6 +31,10 @@
         {% if mode == 'new' %}
           <input type="text" name="project_no" value="{{ val('project_no') }}" required>
           <div class="help-text">登録後は変更できません（主キー）。</div>
+        {% elif current_user.is_admin %}
+          <input type="text" name="project_no"
+                 value="{% if form is not none %}{{ form.get('project_no', project.project_no) }}{% else %}{{ project.project_no }}{% endif %}" required>
+          <div class="help-text">管理者のみ変更できます（主キー）。変更すると案件番号が付け替わります。</div>
         {% else %}
           <input type="text" value="{{ project.project_no }}" disabled>
           <div class="help-text">案件番号は変更できません。</div>
@@ -82,16 +86,6 @@
         <label>受注日</label>
         <input type="text" name="order_date" placeholder="例: 2026/7/5"
                value="{% if form is not none %}{{ form.get('order_date','') }}{% elif project %}{{ project.order_date | ymd }}{% endif %}">
-      </div>
-      <div class="form-group">
-        <label>保守開始日</label>
-        <input type="text" name="maintenance_start" placeholder="例: 2026/7/5"
-               value="{% if form is not none %}{{ form.get('maintenance_start','') }}{% elif project %}{{ project.maintenance_start | ymd }}{% endif %}">
-      </div>
-      <div class="form-group">
-        <label>保守終了日</label>
-        <input type="text" name="maintenance_end" placeholder="例: 2027/3/31"
-               value="{% if form is not none %}{{ form.get('maintenance_end','') }}{% elif project %}{{ project.maintenance_end | ymd }}{% endif %}">
       </div>
       <div class="form-group">
         <label>営業担当者</label>
