@@ -4,13 +4,16 @@
 """
 from datetime import datetime, date
 
+from urllib.parse import quote
+
 from flask import (Blueprint, render_template, request, redirect, url_for,
-                   flash, abort)
+                   flash, abort, make_response)
 from flask_login import login_required, current_user
 
 from ..extensions import db
 from ..models import Project, Status, Rank
 from ..decorators import password_change_guard
+from .. import exporters
 
 projects_bp = Blueprint("projects", __name__, url_prefix="/projects")
 
@@ -117,21 +120,21 @@ def _masters():
     return statuses, ranks
 
 
-# ---------- 一覧・検索 ----------
-@projects_bp.route("")
-@login_required
-@password_change_guard
-def list_projects():
+def build_filtered_query(args):
+    """検索条件と並び順を適用したクエリを返す（一覧とエクスポートで共用）。
+
+    戻り値: (query, filters_dict, sort, direction)
+    """
     f = {
-        "no": _clean(request.args.get("no")),
-        "name": _clean(request.args.get("name")),
-        "customer": _clean(request.args.get("customer")),
-        "status_id": _parse_fk(request.args.get("status_id")),
-        "rank_id": _parse_fk(request.args.get("rank_id")),
-        "month_from": _clean(request.args.get("month_from")),
-        "month_to": _clean(request.args.get("month_to")),
-        "amount_min": _clean(request.args.get("amount_min")),
-        "amount_max": _clean(request.args.get("amount_max")),
+        "no": _clean(args.get("no")),
+        "name": _clean(args.get("name")),
+        "customer": _clean(args.get("customer")),
+        "status_id": _parse_fk(args.get("status_id")),
+        "rank_id": _parse_fk(args.get("rank_id")),
+        "month_from": _clean(args.get("month_from")),
+        "month_to": _clean(args.get("month_to")),
+        "amount_min": _clean(args.get("amount_min")),
+        "amount_max": _clean(args.get("amount_max")),
     }
 
     query = Project.query
@@ -154,12 +157,19 @@ def list_projects():
     if f["amount_max"] and f["amount_max"].isdigit():
         query = query.filter(Project.amount_excl_tax <= int(f["amount_max"]))
 
-    # 並び替え
-    sort = request.args.get("sort", "updated_at")
-    direction = request.args.get("dir", "desc")
+    sort = args.get("sort", "updated_at")
+    direction = args.get("dir", "desc")
     col = SORTABLE.get(sort, Project.updated_at)
     query = query.order_by(col.asc() if direction == "asc" else col.desc())
+    return query, f, sort, direction
 
+
+# ---------- 一覧・検索 ----------
+@projects_bp.route("")
+@login_required
+@password_change_guard
+def list_projects():
+    query, f, sort, direction = build_filtered_query(request.args)
     page = request.args.get("page", 1, type=int)
     pagination = query.paginate(page=page, per_page=PER_PAGE, error_out=False)
 
@@ -245,6 +255,46 @@ def edit(project_no):
     return render_template("projects/form.html", mode="edit",
                            statuses=statuses, ranks=ranks,
                            form=None, project=project)
+
+
+# ---------- エクスポート ----------
+def _download(data: bytes, mimetype: str, ext: str):
+    """バイト列をダウンロードレスポンスにして返す（日本語ファイル名対応）。"""
+    fname = f"案件一覧_{datetime.now().strftime('%Y%m%d')}.{ext}"
+    resp = make_response(data)
+    resp.headers["Content-Type"] = mimetype
+    resp.headers["Content-Disposition"] = f"attachment; filename*=UTF-8''{quote(fname)}"
+    return resp
+
+
+@projects_bp.route("/export.csv")
+@login_required
+@password_change_guard
+def export_csv():
+    query, _, _, _ = build_filtered_query(request.args)
+    data = exporters.to_csv(query.all())
+    return _download(data, "text/csv; charset=utf-8-sig", "csv")
+
+
+@projects_bp.route("/export.xlsx")
+@login_required
+@password_change_guard
+def export_xlsx():
+    query, _, _, _ = build_filtered_query(request.args)
+    data = exporters.to_xlsx(query.all())
+    return _download(
+        data,
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "xlsx")
+
+
+@projects_bp.route("/export.pdf")
+@login_required
+@password_change_guard
+def export_pdf():
+    query, _, _, _ = build_filtered_query(request.args)
+    data = exporters.to_pdf(query.all())
+    return _download(data, "application/pdf", "pdf")
 
 
 # ---------- 削除 ----------

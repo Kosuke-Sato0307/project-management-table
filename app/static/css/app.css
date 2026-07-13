@@ -165,3 +165,7 @@ td.num-col { font-variant-numeric: tabular-nums; }
 .master-item { display: flex; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--border); }
 .master-item:last-child { border-bottom: none; }
 .state-label { font-size: 13px; white-space: nowrap; }
+
+/* 一覧ツールバー / エクスポート */
+.list-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 12px 0; flex-wrap: wrap; }
+.export-buttons { display: flex; align-items: center; gap: 6px; }

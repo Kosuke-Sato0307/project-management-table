@@ -71,7 +71,16 @@
   </form>
 </div>
 
-<p class="text-muted">{{ pagination.total }} 件中 {{ pagination.first if pagination.total else 0 }}〜{{ pagination.last }} 件を表示</p>
+{%- set ex = request.args.to_dict() -%}{%- set _ = ex.pop('page', None) -%}
+<div class="list-toolbar">
+  <p class="text-muted" style="margin:0;">{{ pagination.total }} 件中 {{ pagination.first if pagination.total else 0 }}〜{{ pagination.last }} 件を表示</p>
+  <div class="export-buttons">
+    <span class="text-muted" style="font-size:13px;">この検索結果を出力:</span>
+    <a class="btn btn-sm btn-outline" href="{{ url_for('projects.export_csv', **ex) }}">CSV</a>
+    <a class="btn btn-sm btn-outline" href="{{ url_for('projects.export_xlsx', **ex) }}">Excel</a>
+    <a class="btn btn-sm btn-outline" href="{{ url_for('projects.export_pdf', **ex) }}">PDF</a>
+  </div>
+</div>
 
 <div class="table-wrap">
   <table class="table">
