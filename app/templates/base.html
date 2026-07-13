@@ -15,6 +15,7 @@
       <nav class="nav">
         <a href="{{ url_for('main.index') }}">ホーム</a>
         <a href="{{ url_for('projects.list_projects') }}">案件一覧</a>
+        <a href="{{ url_for('imports.upload_page') }}">インポート</a>
         {% if current_user.is_admin %}
         <a href="{{ url_for('admin.users') }}">ユーザー管理</a>
         <a href="{{ url_for('admin.statuses') }}">マスタ管理</a>

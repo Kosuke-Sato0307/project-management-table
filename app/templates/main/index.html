@@ -23,10 +23,10 @@
   <p>
     <a class="btn" href="{{ url_for('projects.list_projects') }}">案件一覧を開く</a>
     <a class="btn btn-outline" href="{{ url_for('projects.new') }}">＋ 案件を登録</a>
+    <a class="btn btn-outline" href="{{ url_for('imports.upload_page') }}">インポート</a>
   </p>
   <p class="text-muted" style="margin-top:12px;">
-    現在「フェーズ2: 案件の一覧・検索・登録・編集」まで実装済みです。<br>
-    次のフェーズで、エクスポート（CSV/Excel/PDF）とインポート（Excel/CSV）を追加します。
+    案件の検索・登録・編集・削除、エクスポート（CSV/Excel/PDF）、インポート（Excel/CSV）がご利用いただけます。
   </p>
 </div>
 {% endblock %}

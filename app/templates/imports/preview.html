@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block title %}インポート確認 - 案件管理システム{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1>インポート内容の確認</h1>
+  <a class="btn btn-outline btn-sm" href="{{ url_for('imports.upload_page') }}">← やり直す</a>
+</div>
+
+{% if errors %}
+  <div class="card" style="border-color:var(--danger);">
+    <h2 style="font-size:16px; color:var(--danger);">取り込めませんでした（{{ errors|length }}件のエラー）</h2>
+    <p class="text-muted">下記を修正のうえ、もう一度アップロードしてください。<b>1件も取り込まれていません。</b></p>
+    <ul style="margin:0; padding-left:20px; line-height:1.9;">
+      {% for e in errors %}
+      <li class="text-danger">{{ e }}</li>
+      {% endfor %}
+    </ul>
+  </div>
+{% else %}
+  <div class="card">
+    <p>
+      取り込み対象: <b>{{ results|length }}</b> 件
+      （新規 <b>{{ new_count }}</b> 件 / 既存と同じ案件番号 <b>{{ update_count }}</b> 件）
+    </p>
+    {% if update_count > 0 %}
+    <form method="post" action="{{ url_for('imports.commit') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="token" value="{{ token }}">
+      <p class="text-muted">既に登録済みの案件番号（{{ update_count }}件）の扱いを選んでください:</p>
+      <div class="form-group">
+        <label style="font-weight:normal;"><input type="radio" name="dup_mode" value="skip" checked> スキップする（既存はそのまま／新規のみ登録）</label><br>
+        <label style="font-weight:normal;"><input type="radio" name="dup_mode" value="overwrite"> 上書き更新する（ファイルの内容で既存を更新）</label>
+      </div>
+      <button type="submit" class="btn">この内容で取り込む</button>
+    </form>
+    {% else %}
+    <form method="post" action="{{ url_for('imports.commit') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="token" value="{{ token }}">
+      <input type="hidden" name="dup_mode" value="skip">
+      <button type="submit" class="btn">この内容で取り込む</button>
+    </form>
+    {% endif %}
+  </div>
+
+  <div class="table-wrap">
+    <table class="table">
+      <thead>
+        <tr><th>行</th><th>区分</th><th>案件番号</th><th>案件名</th><th>顧客名</th><th>ステータスID</th><th>確度ID</th><th class="num-col">金額(税抜)</th><th>完成月</th></tr>
+      </thead>
+      <tbody>
+        {% for r in results %}
+        <tr>
+          <td>{{ r.row_no }}</td>
+          <td>{% if r.action == 'new' %}<span style="color:var(--success)">新規</span>{% else %}<span style="color:var(--warning)">既存</span>{% endif %}</td>
+          <td>{{ r.data.project_no }}</td>
+          <td>{{ r.data.project_name }}</td>
+          <td>{{ r.data.customer_name or '' }}</td>
+          <td>{{ r.data.status_id or '' }}</td>
+          <td>{{ r.data.rank_id or '' }}</td>
+          <td class="num-col">{{ r.data.amount_excl_tax | yen }}</td>
+          <td>{{ r.data.completion_month or '' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% endif %}
+{% endblock %}

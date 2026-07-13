@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}インポート完了 - 案件管理システム{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1>インポート完了</h1>
+  <a class="btn btn-sm" href="{{ url_for('projects.list_projects') }}">案件一覧を見る →</a>
+</div>
+
+<div class="card">
+  <p style="font-size:16px;">取り込みが完了しました。</p>
+  <table class="detail-table" style="max-width:360px;">
+    <tr><th>新規登録</th><td>{{ inserted }} 件</td></tr>
+    <tr><th>上書き更新</th><td>{{ updated }} 件</td></tr>
+    <tr><th>スキップ（重複）</th><td>{{ skipped }} 件</td></tr>
+  </table>
+  {% if dup_mode == 'skip' and skipped > 0 %}
+  <p class="text-muted">※ 既存と同じ案件番号は「スキップ」設定のため更新していません。</p>
+  {% endif %}
+  <p style="margin-top:16px;">
+    <a class="btn" href="{{ url_for('projects.list_projects') }}">案件一覧へ</a>
+    <a class="btn btn-outline" href="{{ url_for('imports.upload_page') }}">続けてインポート</a>
+  </p>
+</div>
+{% endblock %}
