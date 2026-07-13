@@ -20,8 +20,6 @@
     <tr><th>金額(税抜)</th><td>{% if project.amount_excl_tax is not none %}{{ project.amount_excl_tax | yen }} 円{% else %}—{% endif %}</td></tr>
     <tr><th>完成月</th><td>{{ project.completion_month | ym or '—' }}</td></tr>
     <tr><th>受注日</th><td>{{ project.order_date | ymd or '—' }}</td></tr>
-    <tr><th>保守開始日</th><td>{{ project.maintenance_start | ymd or '—' }}</td></tr>
-    <tr><th>保守終了日</th><td>{{ project.maintenance_end | ymd or '—' }}</td></tr>
     <tr><th>営業担当者</th><td>{{ project.sales_rep or '—' }}</td></tr>
     <tr><th>部署</th><td>{{ project.department or '—' }}</td></tr>
     <tr><th>備考メモ</th><td class="pre">{{ project.notes or '—' }}</td></tr>

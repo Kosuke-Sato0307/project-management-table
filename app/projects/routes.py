@@ -114,18 +114,12 @@ def _collect_project_form(errors):
         "amount_excl_tax": _parse_int(request.form.get("amount_excl_tax"), "金額(税抜)", errors),
         "completion_month": _parse_month(request.form.get("completion_month"), "完成月", errors),
         "order_date": _parse_date(request.form.get("order_date"), "受注日", errors),
-        "maintenance_start": _parse_date(request.form.get("maintenance_start"), "保守開始日", errors),
-        "maintenance_end": _parse_date(request.form.get("maintenance_end"), "保守終了日", errors),
         "sales_rep": _clean(request.form.get("sales_rep")),
         "department": _clean(request.form.get("department")),
         "notes": _clean(request.form.get("notes")),
     }
     if not data["project_name"]:
         errors.append("案件名は必須です。")
-    # 保守期間の前後関係チェック
-    if (data["maintenance_start"] and data["maintenance_end"]
-            and data["maintenance_start"] > data["maintenance_end"]):
-        errors.append("保守終了日は保守開始日以降にしてください。")
     return data
 
 
@@ -259,6 +253,19 @@ def edit(project_no):
     if request.method == "POST":
         errors = []
         data = _collect_project_form(errors)
+
+        # 案件番号は主キーのため通常は変更不可。ただし管理者のみ変更を許可する。
+        # 管理者フォームでは project_no 欄を送信するため、送信された場合のみ検証する。
+        new_no = project_no
+        if current_user.is_admin and "project_no" in request.form:
+            submitted_no = _clean(request.form.get("project_no"))
+            if not submitted_no:
+                errors.append("案件番号は必須です。")
+            elif submitted_no != project_no and db.session.get(Project, submitted_no):
+                errors.append(f"案件番号 '{submitted_no}' は既に登録されています。")
+            else:
+                new_no = submitted_no
+
         if errors:
             for e in errors:
                 flash(e, "danger")
@@ -269,10 +276,12 @@ def edit(project_no):
 
         for key, value in data.items():
             setattr(project, key, value)
+        if new_no != project_no:
+            project.project_no = new_no   # 主キー更新（子参照は無いため安全）
         project.updated_by = current_user.user_id
         db.session.commit()
         flash("案件を更新しました。", "success")
-        return redirect(url_for("projects.detail", project_no=project_no))
+        return redirect(url_for("projects.detail", project_no=new_no))
 
     return render_template("projects/form.html", mode="edit", statuses=statuses,
                            ranks=ranks, departments=departments,
