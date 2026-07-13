@@ -7,7 +7,7 @@
   {%- endif -%}
 {%- endmacro -%}
 
-{%- macro cur_fk(name) -%}
+{%- macro cur(name) -%}
   {%- if form is not none -%}{{ form.get(name, '') }}
   {%- elif project -%}{% set x = project[name] %}{{ x if x is not none else '' }}
   {%- endif -%}
@@ -46,7 +46,7 @@
       </div>
       <div class="form-group">
         <label>ステータス</label>
-        {% set c = cur_fk('status_id') %}
+        {% set c = cur('status_id') %}
         <select name="status_id">
           <option value="">（未設定）</option>
           {% for s in statuses %}
@@ -56,7 +56,7 @@
       </div>
       <div class="form-group">
         <label>確度</label>
-        {% set cr = cur_fk('rank_id') %}
+        {% set cr = cur('rank_id') %}
         <select name="rank_id">
           <option value="">（未設定）</option>
           {% for r in ranks %}
@@ -70,23 +70,28 @@
       </div>
       <div class="form-group">
         <label>金額(税抜)（円）</label>
-        <input type="number" name="amount_excl_tax" value="{{ val('amount_excl_tax') }}" min="0" step="1">
+        <input type="text" name="amount_excl_tax" data-comma inputmode="numeric"
+               value="{{ val('amount_excl_tax') }}" placeholder="例: 1,000,000">
       </div>
       <div class="form-group">
         <label>完成月</label>
-        <input type="month" name="completion_month" value="{{ val('completion_month') }}">
+        <input type="text" name="completion_month" placeholder="例: 2026/7"
+               value="{% if form is not none %}{{ form.get('completion_month','') }}{% elif project %}{{ project.completion_month | ym }}{% endif %}">
       </div>
       <div class="form-group">
         <label>受注日</label>
-        <input type="date" name="order_date" value="{{ val('order_date') }}">
+        <input type="text" name="order_date" placeholder="例: 2026/7/5"
+               value="{% if form is not none %}{{ form.get('order_date','') }}{% elif project %}{{ project.order_date | ymd }}{% endif %}">
       </div>
       <div class="form-group">
         <label>保守開始日</label>
-        <input type="date" name="maintenance_start" value="{{ val('maintenance_start') }}">
+        <input type="text" name="maintenance_start" placeholder="例: 2026/7/5"
+               value="{% if form is not none %}{{ form.get('maintenance_start','') }}{% elif project %}{{ project.maintenance_start | ymd }}{% endif %}">
       </div>
       <div class="form-group">
         <label>保守終了日</label>
-        <input type="date" name="maintenance_end" value="{{ val('maintenance_end') }}">
+        <input type="text" name="maintenance_end" placeholder="例: 2027/3/31"
+               value="{% if form is not none %}{{ form.get('maintenance_end','') }}{% elif project %}{{ project.maintenance_end | ymd }}{% endif %}">
       </div>
       <div class="form-group">
         <label>営業担当者</label>
@@ -94,7 +99,17 @@
       </div>
       <div class="form-group">
         <label>部署</label>
-        <input type="text" name="department" value="{{ val('department') }}">
+        {% set cd = cur('department') %}
+        <select name="department">
+          <option value="">（未設定）</option>
+          {% for d in departments %}
+          <option value="{{ d.name }}" {% if cd == d.name %}selected{% endif %}>{{ d.name }}</option>
+          {% endfor %}
+          {# マスタに無い既存値も選択状態を保持 #}
+          {% if cd and cd not in departments|map(attribute='name')|list %}
+          <option value="{{ cd }}" selected>{{ cd }}（旧値）</option>
+          {% endif %}
+        </select>
       </div>
     </div>
 

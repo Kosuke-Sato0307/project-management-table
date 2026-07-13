@@ -4,7 +4,7 @@ import pytest
 from app import create_app
 from app.config import TestConfig
 from app.extensions import db
-from app.models import User, Status, Rank
+from app.models import User, Status, Rank, Department
 
 
 @pytest.fixture()
@@ -18,6 +18,8 @@ def app():
             Status(name="受注", sort_order=1),
             Rank(name="A", sort_order=0),
             Rank(name="B", sort_order=1),
+            Department(name="第1営業部", sort_order=0),
+            Department(name="大阪支店", sort_order=1),
         ])
         admin = User(user_id="admin", name="管理者", role="admin",
                      is_active_flag=True, must_change_password=False)

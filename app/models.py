@@ -90,6 +90,16 @@ class Rank(db.Model):
     projects = db.relationship("Project", back_populates="rank")
 
 
+class Department(db.Model):
+    """部署のマスタ（第1営業部/大阪支店 …）。案件では名称を文字列で保持する。"""
+    __tablename__ = "departments"
+
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(64), nullable=False, unique=True)
+    sort_order = db.Column(db.Integer, nullable=False, default=0)
+    is_active = db.Column(db.Boolean, nullable=False, default=True)
+
+
 class Project(db.Model):
     """案件。案件番号を主キーとする（手入力・重複はDBの一意制約で担保）。"""
     __tablename__ = "projects"

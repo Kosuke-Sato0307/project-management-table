@@ -11,7 +11,7 @@ from flask import (Blueprint, render_template, request, redirect, url_for,
 from flask_login import current_user
 
 from ..extensions import db
-from ..models import User, Status, Rank
+from ..models import User, Status, Rank, Department
 from ..decorators import admin_required
 
 admin_bp = Blueprint("admin", __name__, url_prefix="/admin")
@@ -237,3 +237,60 @@ def toggle_rank(item_id):
         db.session.commit()
         flash("表示/非表示を切り替えました。", "info")
     return redirect(url_for("admin.ranks"))
+
+
+# ============ マスタ管理: 部署 ============
+@admin_bp.route("/departments")
+@admin_required
+def departments():
+    items = Department.query.order_by(Department.sort_order, Department.id).all()
+    return render_template("admin/departments.html", items=items)
+
+
+@admin_bp.route("/departments/new", methods=["POST"])
+@admin_required
+def new_department():
+    name = (request.form.get("name") or "").strip()
+    sort_order = request.form.get("sort_order", type=int) or 0
+    if not name:
+        flash("名称を入力してください。", "danger")
+    elif Department.query.filter_by(name=name).first():
+        flash(f"'{name}' は既に存在します。", "danger")
+    else:
+        db.session.add(Department(name=name, sort_order=sort_order))
+        db.session.commit()
+        flash(f"部署 '{name}' を追加しました。", "success")
+    return redirect(url_for("admin.departments"))
+
+
+@admin_bp.route("/departments/<int:item_id>/edit", methods=["POST"])
+@admin_required
+def edit_department(item_id):
+    item = db.session.get(Department, item_id)
+    if item is None:
+        flash("対象が見つかりません。", "danger")
+        return redirect(url_for("admin.departments"))
+    name = (request.form.get("name") or "").strip()
+    if not name:
+        flash("名称を入力してください。", "danger")
+        return redirect(url_for("admin.departments"))
+    dup = Department.query.filter_by(name=name).first()
+    if dup and dup.id != item.id:
+        flash(f"'{name}' は既に存在します。", "danger")
+        return redirect(url_for("admin.departments"))
+    item.name = name
+    item.sort_order = request.form.get("sort_order", type=int) or 0
+    db.session.commit()
+    flash("部署を更新しました。", "success")
+    return redirect(url_for("admin.departments"))
+
+
+@admin_bp.route("/departments/<int:item_id>/toggle", methods=["POST"])
+@admin_required
+def toggle_department(item_id):
+    item = db.session.get(Department, item_id)
+    if item:
+        item.is_active = not item.is_active
+        db.session.commit()
+        flash("表示/非表示を切り替えました。", "info")
+    return redirect(url_for("admin.departments"))

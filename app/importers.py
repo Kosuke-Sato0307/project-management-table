@@ -21,9 +21,12 @@ IMPORT_COLUMNS = [
     ("保守開始日", "maintenance_start", "date", False),
     ("保守終了日", "maintenance_end", "date", False),
     ("営業担当者", "sales_rep", "text", False),
-    ("部署", "department", "text", False),
+    ("部署", "department", "department", False),
     ("備考メモ", "notes", "text", False),
 ]
+
+# 「（未設定）」は空（None）として扱う
+UNSET = "（未設定）"
 
 # 見出しの表記ゆれを許容
 HEADER_ALIASES = {
@@ -91,13 +94,13 @@ def _to_date(v):
 
 
 def _to_month(v):
+    """完成月を 'YYYY-MM'（ゼロ埋め）に正規化。"""
     if v is None or (isinstance(v, str) and v.strip() == ""):
         return None
     if isinstance(v, (datetime, date)):
         return v.strftime("%Y-%m")
     s = str(v).strip().replace("/", "-")
-    datetime.strptime(s, "%Y-%m")  # 失敗すれば ValueError
-    return s
+    return datetime.strptime(s, "%Y-%m").strftime("%Y-%m")  # 失敗すれば ValueError
 
 
 # ---------- ファイル解析 ----------
@@ -148,13 +151,14 @@ def parse_file(path, ext):
 
 
 # ---------- 検証 ----------
-def validate(headers, data_rows, existing_nos, status_map, rank_map):
+def validate(headers, data_rows, existing_nos, status_map, rank_map, dept_map=None):
     """全行を検証する。
 
     戻り値: (results, errors)
       results: list[RowResult]（エラーが無い場合のみ意味を持つ）
       errors:  list[str]（1件でもあれば取込中止）
     """
+    dept_names = set(dept_map or [])
     errors = []
 
     # 見出し→列インデックス
@@ -204,7 +208,7 @@ def validate(headers, data_rows, existing_nos, status_map, rank_map):
                     val = _to_month(raw)
                 elif kind == "status":
                     name = _to_text(raw) or None
-                    if name is None:
+                    if name is None or name == UNSET:
                         val = None
                     elif name in status_map:
                         val = status_map[name]
@@ -214,12 +218,22 @@ def validate(headers, data_rows, existing_nos, status_map, rank_map):
                         val = None
                 elif kind == "rank":
                     name = _to_text(raw) or None
-                    if name is None:
+                    if name is None or name == UNSET:
                         val = None
                     elif name in rank_map:
                         val = rank_map[name]
                     else:
                         errors.append(f"{row_no}行目: 確度「{name}」は未登録です。マスタに追加してください。")
+                        row_ok = False
+                        val = None
+                elif kind == "department":
+                    name = _to_text(raw) or None
+                    if name is None or name == UNSET:
+                        val = None
+                    elif name in dept_names:
+                        val = name  # 部署は名称を保存
+                    else:
+                        errors.append(f"{row_no}行目: 部署「{name}」は未登録です。マスタに追加してください。")
                         row_ok = False
                         val = None
                 else:
@@ -268,10 +282,12 @@ def template_csv() -> bytes:
     return buf.getvalue().encode("utf-8-sig")
 
 
-def template_xlsx() -> bytes:
+def template_xlsx(status_names=None, rank_names=None, dept_names=None) -> bytes:
+    """Excelテンプレート。ステータス/確度/部署の列はドロップダウンにする。"""
     from openpyxl import Workbook
     from openpyxl.styles import Font, PatternFill
     from openpyxl.utils import get_column_letter
+    from openpyxl.worksheet.datavalidation import DataValidation
 
     wb = Workbook()
     ws = wb.active
@@ -283,6 +299,22 @@ def template_xlsx() -> bytes:
         cell.fill = fill
     for i, h in enumerate(TEMPLATE_HEADERS, 1):
         ws.column_dimensions[get_column_letter(i)].width = max(12, len(h) * 2 + 2)
+
+    # ドロップダウン（データ入力規則）を該当列の 2〜1000 行に設定
+    choices = {
+        "ステータス": [UNSET] + list(status_names or []),
+        "確度": [UNSET] + list(rank_names or []),
+        "部署": [UNSET] + list(dept_names or []),
+    }
+    for header, values in choices.items():
+        if header not in TEMPLATE_HEADERS or len(values) <= 1:
+            continue
+        col = get_column_letter(TEMPLATE_HEADERS.index(header) + 1)
+        formula = '"' + ",".join(values) + '"'
+        dv = DataValidation(type="list", formula1=formula, allow_blank=True)
+        ws.add_data_validation(dv)
+        dv.add(f"{col}2:{col}1000")
+
     bio = io.BytesIO()
     wb.save(bio)
     return bio.getvalue()

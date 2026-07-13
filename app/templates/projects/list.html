@@ -53,9 +53,9 @@
       <div class="form-group">
         <label>完成月（から〜まで）</label>
         <div class="range-row">
-          <input type="month" name="month_from" value="{{ filters.month_from or '' }}">
+          <input type="text" name="month_from" placeholder="2026/7" value="{{ filters.month_from or '' }}">
           <span>〜</span>
-          <input type="month" name="month_to" value="{{ filters.month_to or '' }}">
+          <input type="text" name="month_to" placeholder="2026/12" value="{{ filters.month_to or '' }}">
         </div>
       </div>
       <div class="form-group">
@@ -109,7 +109,7 @@
         <td>{{ p.status.name if p.status else '' }}</td>
         <td>{{ p.rank.name if p.rank else '' }}</td>
         <td class="num-col">{{ p.amount_excl_tax | yen }}</td>
-        <td>{{ p.completion_month or '' }}</td>
+        <td>{{ p.completion_month | ym }}</td>
         <td>{{ p.updated_at | jst }}</td>
         <td class="nowrap">
           <a class="btn btn-sm btn-outline" href="{{ url_for('projects.edit', project_no=p.project_no) }}">編集</a>

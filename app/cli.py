@@ -11,7 +11,7 @@ import click
 from flask import Flask
 
 from .extensions import db
-from .models import User, Status, Rank
+from .models import User, Status, Rank, Department
 
 
 def register_cli(app: Flask) -> None:
@@ -43,19 +43,23 @@ def register_cli(app: Flask) -> None:
     @app.cli.command("seed-masters")
     def seed_masters():
         """案件ステータス・確度ランクの初期値を投入する（既存があればスキップ）。"""
-        default_statuses = ["進行中", "受注", "失注", "完了"]
+        default_statuses = ["進行中", "受注", "失注", "完成"]
         for i, name in enumerate(default_statuses):
             if not Status.query.filter_by(name=name).first():
                 db.session.add(Status(name=name, sort_order=i))
 
-        default_ranks = [
-            ("A", "受注確実（目安 80%以上）"),
-            ("B", "有望（目安 50%程度）"),
-            ("C", "初期段階（目安 30%以下）"),
-        ]
-        for i, (name, note) in enumerate(default_ranks):
+        default_ranks = ["○", "A", "B", "C", "D", "E", "×"]
+        for i, name in enumerate(default_ranks):
             if not Rank.query.filter_by(name=name).first():
-                db.session.add(Rank(name=name, sort_order=i, note=note))
+                db.session.add(Rank(name=name, sort_order=i))
+
+        default_departments = [
+            "第1営業部", "大阪支店", "名古屋営業所", "ﾈｯﾄﾜｰｸｿﾘｭｰｼｮﾝ部",
+            "第2営業部", "新規事業開発室", "経営企画部",
+        ]
+        for i, name in enumerate(default_departments):
+            if not Department.query.filter_by(name=name).first():
+                db.session.add(Department(name=name, sort_order=i))
 
         db.session.commit()
-        click.echo("マスタ（ステータス・確度ランク）の初期値を投入しました。")
+        click.echo("マスタ（ステータス・確度ランク・部署）の初期値を投入しました。")

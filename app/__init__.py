@@ -81,9 +81,20 @@ def _register_template_helpers(app: Flask) -> None:
 
     @app.template_filter("ymd")
     def ymd(value):
-        """日付を YYYY-MM-DD 表示。"""
+        """日付を yyyy/m/d 表示（ゼロ埋めなし）。例: 2026/7/5"""
         if value is None:
             return ""
-        if isinstance(value, datetime):
-            return value.strftime("%Y-%m-%d")
-        return value.strftime("%Y-%m-%d") if hasattr(value, "strftime") else str(value)
+        if hasattr(value, "year"):
+            return f"{value.year}/{value.month}/{value.day}"
+        return str(value)
+
+    @app.template_filter("ym")
+    def ym(value):
+        """完成月 'YYYY-MM' を 'YYYY/M' 表示（ゼロ埋めなし）。例: 2026/7"""
+        if value is None or value == "":
+            return ""
+        s = str(value).replace("/", "-")
+        parts = s.split("-")
+        if len(parts) >= 2 and parts[0].isdigit() and parts[1].isdigit():
+            return f"{int(parts[0])}/{int(parts[1])}"
+        return str(value)

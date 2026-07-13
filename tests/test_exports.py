@@ -21,7 +21,7 @@ def test_export_csv(client):
     text = resp.data.decode("utf-8-sig")
     assert "案件番号" in text          # ヘッダー
     assert "エクスポート案件" in text  # データ
-    assert "1000000" in text
+    assert "1,000,000" in text         # 金額はカンマ表示
 
 
 def test_export_xlsx(client):

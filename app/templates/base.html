@@ -6,6 +6,7 @@
   <title>{% block title %}案件管理システム{% endblock %}</title>
   <!-- CSSは同梱（外部CDNは一切参照しない：完全ローカル運用のため） -->
   <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
+  <script src="{{ url_for('static', filename='js/app.js') }}" defer></script>
 </head>
 <body>
   {% if current_user.is_authenticated %}

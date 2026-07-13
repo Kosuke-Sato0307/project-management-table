@@ -11,7 +11,7 @@ from flask import (Blueprint, render_template, request, redirect, url_for,
 from flask_login import login_required, current_user
 
 from ..extensions import db
-from ..models import Project, Status, Rank
+from ..models import Project, Status, Rank, Department
 from ..decorators import password_change_guard
 from .. import exporters
 
@@ -57,22 +57,38 @@ def _parse_date(value, field_label, errors):
     value = _clean(value)
     if value is None:
         return None
-    try:
-        return datetime.strptime(value, "%Y-%m-%d").date()
-    except ValueError:
-        errors.append(f"{field_label}は YYYY-MM-DD 形式で入力してください。")
-        return None
+    # yyyy/m/d と yyyy-mm-dd の両方を受理
+    for fmt in ("%Y/%m/%d", "%Y-%m-%d"):
+        try:
+            return datetime.strptime(value, fmt).date()
+        except ValueError:
+            continue
+    errors.append(f"{field_label}は 2026/7/5 の形式で入力してください。")
+    return None
 
 
 def _parse_month(value, field_label, errors):
+    """完成月。yyyy/m または yyyy-mm を受理し、保存用に 'YYYY-MM' へ正規化。"""
+    value = _clean(value)
+    if value is None:
+        return None
+    normalized = value.replace("/", "-")
+    try:
+        dt = datetime.strptime(normalized, "%Y-%m")
+        return dt.strftime("%Y-%m")   # ゼロ埋め正規化（並び替え/範囲検索用）
+    except ValueError:
+        errors.append(f"{field_label}は 2026/7 の形式で入力してください。")
+        return None
+
+
+def normalize_month(value):
+    """検索フィルタ用: 'yyyy/m' や 'yyyy-m' を 'YYYY-MM' に正規化（不正はNone）。"""
     value = _clean(value)
     if value is None:
         return None
     try:
-        datetime.strptime(value, "%Y-%m")
-        return value
+        return datetime.strptime(value.replace("/", "-"), "%Y-%m").strftime("%Y-%m")
     except ValueError:
-        errors.append(f"{field_label}は YYYY-MM 形式で入力してください。")
         return None
 
 
@@ -117,7 +133,8 @@ def _masters():
     """選択肢用に有効なマスタを取得。"""
     statuses = Status.query.filter_by(is_active=True).order_by(Status.sort_order).all()
     ranks = Rank.query.filter_by(is_active=True).order_by(Rank.sort_order).all()
-    return statuses, ranks
+    departments = Department.query.filter_by(is_active=True).order_by(Department.sort_order).all()
+    return statuses, ranks, departments
 
 
 def build_filtered_query(args):
@@ -148,10 +165,12 @@ def build_filtered_query(args):
         query = query.filter(Project.status_id == f["status_id"])
     if f["rank_id"]:
         query = query.filter(Project.rank_id == f["rank_id"])
-    if f["month_from"]:
-        query = query.filter(Project.completion_month >= f["month_from"])
-    if f["month_to"]:
-        query = query.filter(Project.completion_month <= f["month_to"])
+    mf = normalize_month(f["month_from"])
+    mt = normalize_month(f["month_to"])
+    if mf:
+        query = query.filter(Project.completion_month >= mf)
+    if mt:
+        query = query.filter(Project.completion_month <= mt)
     if f["amount_min"] and f["amount_min"].isdigit():
         query = query.filter(Project.amount_excl_tax >= int(f["amount_min"]))
     if f["amount_max"] and f["amount_max"].isdigit():
@@ -173,10 +192,11 @@ def list_projects():
     page = request.args.get("page", 1, type=int)
     pagination = query.paginate(page=page, per_page=PER_PAGE, error_out=False)
 
-    statuses, ranks = _masters()
+    statuses, ranks, departments = _masters()
     return render_template("projects/list.html",
                            pagination=pagination, projects=pagination.items,
                            filters=f, statuses=statuses, ranks=ranks,
+                           departments=departments,
                            sort=sort, direction=direction)
 
 
@@ -196,7 +216,7 @@ def detail(project_no):
 @login_required
 @password_change_guard
 def new():
-    statuses, ranks = _masters()
+    statuses, ranks, departments = _masters()
     if request.method == "POST":
         errors = []
         project_no = _clean(request.form.get("project_no"))
@@ -211,6 +231,7 @@ def new():
                 flash(e, "danger")
             return render_template("projects/form.html", mode="new",
                                    statuses=statuses, ranks=ranks,
+                                   departments=departments,
                                    form=request.form, project=None)
 
         project = Project(project_no=project_no,
@@ -221,8 +242,8 @@ def new():
         flash(f"案件 '{project_no}' を登録しました。", "success")
         return redirect(url_for("projects.detail", project_no=project_no))
 
-    return render_template("projects/form.html", mode="new",
-                           statuses=statuses, ranks=ranks, form={}, project=None)
+    return render_template("projects/form.html", mode="new", statuses=statuses,
+                           ranks=ranks, departments=departments, form={}, project=None)
 
 
 # ---------- 編集 ----------
@@ -233,7 +254,7 @@ def edit(project_no):
     project = db.session.get(Project, project_no)
     if project is None:
         abort(404)
-    statuses, ranks = _masters()
+    statuses, ranks, departments = _masters()
 
     if request.method == "POST":
         errors = []
@@ -243,6 +264,7 @@ def edit(project_no):
                 flash(e, "danger")
             return render_template("projects/form.html", mode="edit",
                                    statuses=statuses, ranks=ranks,
+                                   departments=departments,
                                    form=request.form, project=project)
 
         for key, value in data.items():
@@ -252,8 +274,8 @@ def edit(project_no):
         flash("案件を更新しました。", "success")
         return redirect(url_for("projects.detail", project_no=project_no))
 
-    return render_template("projects/form.html", mode="edit",
-                           statuses=statuses, ranks=ranks,
+    return render_template("projects/form.html", mode="edit", statuses=statuses,
+                           ranks=ranks, departments=departments,
                            form=None, project=project)
 
 

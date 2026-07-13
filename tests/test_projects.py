@@ -54,9 +54,9 @@ def test_invalid_amount(client):
 def test_invalid_date(client):
     login(client, "admin", "adminpass1")
     resp = client.post("/projects/new", data={
-        "project_no": "P-320", "project_name": "日付不正", "order_date": "2020/01/01",
+        "project_no": "P-320", "project_name": "日付不正", "order_date": "2020.01.01",
     }, follow_redirects=True)
-    assert "YYYY-MM-DD".encode() in resp.data
+    assert "2026/7/5 の形式".encode() in resp.data
 
 
 def test_amount_accepts_comma_and_fullwidth(client, app):

@@ -12,7 +12,7 @@ from flask import (Blueprint, render_template, request, redirect, url_for,
 from flask_login import login_required, current_user
 
 from ..extensions import db
-from ..models import Project, Status, Rank
+from ..models import Project, Status, Rank, Department
 from ..decorators import password_change_guard
 from .. import importers
 
@@ -31,7 +31,10 @@ def _upload_dir() -> Path:
 def _masters_maps():
     statuses = Status.query.all()
     ranks = Rank.query.all()
-    return ({s.name: s.id for s in statuses}, {r.name: r.id for r in ranks})
+    depts = Department.query.all()
+    return ({s.name: s.id for s in statuses},
+            {r.name: r.id for r in ranks},
+            {d.name: d.id for d in depts})
 
 
 def _existing_nos():
@@ -65,7 +68,10 @@ def template_csv():
 @login_required
 @password_change_guard
 def template_xlsx():
-    resp = make_response(importers.template_xlsx())
+    statuses = [s.name for s in Status.query.filter_by(is_active=True).order_by(Status.sort_order)]
+    ranks = [r.name for r in Rank.query.filter_by(is_active=True).order_by(Rank.sort_order)]
+    depts = [d.name for d in Department.query.filter_by(is_active=True).order_by(Department.sort_order)]
+    resp = make_response(importers.template_xlsx(statuses, ranks, depts))
     resp.headers["Content-Type"] = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     resp.headers["Content-Disposition"] = "attachment; filename*=UTF-8''%E6%A1%88%E4%BB%B6%E5%8F%96%E8%BE%BC%E3%83%86%E3%83%B3%E3%83%97%E3%83%AC.xlsx"
     return resp
@@ -92,9 +98,9 @@ def preview():
 
     try:
         headers, data_rows = importers.parse_file(str(path), ext)
-        status_map, rank_map = _masters_maps()
+        status_map, rank_map, dept_map = _masters_maps()
         results, errors = importers.validate(
-            headers, data_rows, _existing_nos(), status_map, rank_map)
+            headers, data_rows, _existing_nos(), status_map, rank_map, dept_map)
     except Exception as e:  # 解析自体の失敗（壊れたファイル等）
         path.unlink(missing_ok=True)
         flash(f"ファイルを読み込めませんでした: {e}", "danger")
@@ -139,9 +145,9 @@ def commit():
 
     # 確定時にも再解析・再検証（安全のため）
     headers, data_rows = importers.parse_file(str(path), ext)
-    status_map, rank_map = _masters_maps()
+    status_map, rank_map, dept_map = _masters_maps()
     results, errors = importers.validate(
-        headers, data_rows, _existing_nos(), status_map, rank_map)
+        headers, data_rows, _existing_nos(), status_map, rank_map, dept_map)
 
     if errors:
         path.unlink(missing_ok=True)
