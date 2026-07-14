@@ -15,20 +15,21 @@
 
 {% block content %}
 <div class="page-header">
-  <h1>{{ '案件登録' if mode == 'new' else '案件編集' }}<span class="dept-in-title">（{{ department.name }}）</span></h1>
-  <a class="btn btn-outline btn-sm" href="{{ url_for('projects.list_projects', dept=department.id) }}">← 一覧へ</a>
+  <h1>{{ plan_type_labels[plan_type] }}: {{ '案件登録' if mode == 'new' else '案件編集' }}<span class="dept-in-title">（{{ department.name }}・{{ period }}期）</span></h1>
+  <a class="btn btn-outline btn-sm" href="{{ url_for('projects.list_projects', dept=department.id, type=plan_type, period=period) }}">← 一覧へ</a>
 </div>
 
 <div class="card">
   <form method="post"
-        action="{{ url_for('projects.new', dept=department.id) if mode == 'new' else url_for('projects.edit', project_id=project.id) }}">
+        action="{{ url_for('projects.new', dept=department.id, type=plan_type, period=period) if mode == 'new' else url_for('projects.edit', project_id=project.id) }}">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
     <div class="form-grid">
       <div class="form-group">
         <label>計上月 <span class="text-danger">*</span></label>
-        <input type="text" name="accounting_month" placeholder="例: 2026/9" required
-               value="{% if form is not none %}{{ form.get('accounting_month','') }}{% elif project %}{{ project.accounting_month | ym }}{% endif %}">
+        <input type="month" name="accounting_month" required
+               value="{% if form is not none %}{{ form.get('accounting_month','') }}{% elif project %}{{ project.accounting_month }}{% endif %}">
+        <div class="help-text">カレンダーから年月を選択します。</div>
       </div>
       <div class="form-group">
         <label>担当者</label>

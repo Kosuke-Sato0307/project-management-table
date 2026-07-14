@@ -1,10 +1,13 @@
 """数字まとめ（集計ロジック calc.py）のテスト。
 
-conftest の第2営業部・59期データ:
-  - 計画案件A: 期初計画/確度○/2026-09(1Q,上期)/売上100万 仕入60万 粗利40万 (hanako)
-  - 新規案件B: 新規/確度○/2026-12(2Q,上期)/売上50万 仕入20万 粗利30万 (hanako)
-  - 見込案件C: 新規/確度B(実績外)/2027-03(3Q,下期)/売上80万 仕入50万 粗利30万 (hanako)
+conftest の第2営業部・59期データ（計画/実績は plan_type で区別）:
+  - 計画案件A: 期初計画(initial)/2026-09(1Q,上期)/売上100万 仕入60万 粗利40万 (hanako)
+  - 中期案件M: 中期計画(midterm)/2026-09(1Q,上期)/売上120万 仕入70万 (hanako)
+  - 実績A':   案件管理(management)/確度○/2026-09(1Q,上期)/売上100万 仕入60万 粗利40万 (hanako)
+  - 新規案件B: 案件管理(management)/確度○/2026-12(2Q,上期)/売上50万 仕入20万 粗利30万 (hanako)
+  - 見込案件C: 案件管理(management)/確度B(実績外)/2027-03(3Q,下期)/売上80万 仕入50万 粗利30万 (hanako)
   - 販管費 2026-09: 10万
+実績 = 案件管理 かつ 確度○ ／ 期初計画 = initial ／ 中期計画 = midterm。
 """
 from app.analytics import calc
 from app.models import Department, Project, Category, Rank
@@ -22,8 +25,9 @@ def test_yojitsu_full_sales(app):
         tables = calc.yojitsu(dept, projects, 59, "full")
         sales_table = next(t for t in tables if t["metric"] == "売上")
         total = sales_table["total"]["cells"][0]
-        assert total["plan"] == 1000000        # 期初計画のみ
-        assert total["actual"] == 1500000      # 確度○（A+B）
+        assert total["plan"] == 1000000        # 期初計画のみ（A）
+        assert total["midterm"] == 1200000     # 中期計画のみ（M）
+        assert total["actual"] == 1500000      # 案件管理×確度○（A'+B）
         assert total["var"] == 500000
         assert round(total["rate"], 1) == 150.0
 

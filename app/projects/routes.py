@@ -16,11 +16,26 @@ from flask_login import login_required, current_user
 
 from ..extensions import db
 from ..models import Project, Rank, Kubun, Category, Department, User
-from ..decorators import password_change_guard, resolve_department
+from ..decorators import password_change_guard, resolve_department, resolve_period
 from .. import exporters
 from .. import fiscal
 
 projects_bp = Blueprint("projects", __name__, url_prefix="/projects")
+
+
+def _resolve_plan_type():
+    """?type=initial|midterm|management を検証。既定は案件管理(management)。"""
+    pt = request.values.get("type")
+    if pt in Project.PLAN_TYPES:
+        return pt
+    return Project.PLAN_MANAGEMENT
+
+
+def _existing_periods(department):
+    """その部門の案件に存在する期の一覧（期セレクタの選択肢用）。"""
+    rows = db.session.query(Project.fiscal_period).filter_by(
+        department_id=department.id).distinct().all()
+    return [r[0] for r in rows]
 
 
 # ---------- 入力パース/検証のヘルパー ----------
@@ -122,13 +137,16 @@ def _collect_project_form(department, errors):
 @password_change_guard
 def list_projects():
     department, viewable = resolve_department()
+    plan_type = _resolve_plan_type()
     if department is None:
-        return render_template("projects/list.html", department=None,
-                               viewable=[], months_data=[], period=fiscal.CURRENT_FISCAL_PERIOD)
+        return render_template(
+            "projects/list.html", department=None, viewable=[], months_data=[],
+            period=fiscal.default_fiscal_period(), plan_type=plan_type,
+            plan_type_labels=Project.PLAN_TYPE_LABELS, periods=fiscal.selectable_periods())
 
-    period = fiscal.CURRENT_FISCAL_PERIOD
+    period = resolve_period()
     projects = Project.query.filter_by(
-        department_id=department.id, fiscal_period=period
+        department_id=department.id, fiscal_period=period, plan_type=plan_type
     ).order_by(Project.accounting_month, Project.id).all()
 
     # 計上月ごとにグルーピング（期の12ヶ月順、該当なしの月も枠を作る）
@@ -148,6 +166,8 @@ def list_projects():
         "projects/list.html", department=department, viewable=viewable,
         months_data=months_data, period=period,
         period_label=fiscal.period_label(period),
+        periods=fiscal.selectable_periods(_existing_periods(department)),
+        plan_type=plan_type, plan_type_labels=Project.PLAN_TYPE_LABELS,
         can_edit=current_user.can_edit_department(department.id) or current_user.role == 'user',
     )
 
@@ -177,6 +197,8 @@ def new():
     if not (current_user.can_edit_department(department.id)
             or current_user.role == "user"):
         abort(403)
+    period = resolve_period()
+    plan_type = _resolve_plan_type()
     ranks, kubun, categories, members = _masters(department)
 
     if request.method == "POST":
@@ -191,16 +213,19 @@ def new():
                 flash(e, "danger")
             return render_template("projects/form.html", mode="new", department=department,
                                    ranks=ranks, kubun=kubun, categories=categories,
-                                   members=members, form=request.form, project=None)
+                                   members=members, form=request.form, project=None,
+                                   plan_type=plan_type, period=period,
+                                   plan_type_labels=Project.PLAN_TYPE_LABELS)
 
         project = Project(department_id=department.id,
-                          fiscal_period=fiscal.CURRENT_FISCAL_PERIOD,
+                          fiscal_period=period, plan_type=plan_type,
                           created_by=current_user.user_id,
                           updated_by=current_user.user_id, **data)
         db.session.add(project)
         db.session.commit()
         flash(f"案件 '{project.project_name}' を登録しました。", "success")
-        return redirect(url_for("projects.list_projects", dept=department.id))
+        return redirect(url_for("projects.list_projects", dept=department.id,
+                                type=plan_type, period=period))
 
     # 既定の担当者
     default_form = {}
@@ -208,7 +233,9 @@ def new():
         default_form = {"assignee_user_id": current_user.user_id}
     return render_template("projects/form.html", mode="new", department=department,
                            ranks=ranks, kubun=kubun, categories=categories,
-                           members=members, form=default_form, project=None)
+                           members=members, form=default_form, project=None,
+                           plan_type=plan_type, period=period,
+                           plan_type_labels=Project.PLAN_TYPE_LABELS)
 
 
 # ---------- 編集 ----------
@@ -238,20 +265,25 @@ def edit(project_id):
                 flash(e, "danger")
             return render_template("projects/form.html", mode="edit", department=department,
                                    ranks=ranks, kubun=kubun, categories=categories,
-                                   members=members, form=request.form, project=project)
+                                   members=members, form=request.form, project=project,
+                                   plan_type=project.plan_type, period=project.fiscal_period,
+                                   plan_type_labels=Project.PLAN_TYPE_LABELS)
 
         for key, value in data.items():
             setattr(project, key, value)
         project.updated_by = current_user.user_id
         db.session.commit()
         flash("案件を更新しました。", "success")
-        return redirect(url_for("projects.list_projects", dept=department.id))
+        return redirect(url_for("projects.list_projects", dept=department.id,
+                                type=project.plan_type, period=project.fiscal_period))
 
     if not current_user.can_edit_project(project):
         abort(403)
     return render_template("projects/form.html", mode="edit", department=department,
                            ranks=ranks, kubun=kubun, categories=categories,
-                           members=members, form=None, project=project)
+                           members=members, form=None, project=project,
+                           plan_type=project.plan_type, period=project.fiscal_period,
+                           plan_type_labels=Project.PLAN_TYPE_LABELS)
 
 
 def _validate_assignee(data, department, errors):
@@ -275,25 +307,80 @@ def delete(project_id):
     if not current_user.can_edit_project(project):
         abort(403)
     dept_id = project.department_id
+    plan_type = project.plan_type
+    period = project.fiscal_period
     name = project.project_name
     db.session.delete(project)
     db.session.commit()
     flash(f"案件 '{name}' を削除しました。", "info")
-    return redirect(url_for("projects.list_projects", dept=dept_id))
+    return redirect(url_for("projects.list_projects", dept=dept_id,
+                            type=plan_type, period=period))
+
+
+# ---------- 期初計画/中期計画 → 案件管理へコピー ----------
+# コピー対象の列（監査列・plan_type・fiscal_period・部門は再設定するため除外）
+_COPY_FIELDS = ("accounting_month", "assignee_user_id", "kubun_id", "category_id",
+                "project_name", "rank_id", "sales", "cost",
+                "estimated_hours", "actual_hours", "notes")
+
+
+@projects_bp.route("/copy", methods=["POST"])
+@login_required
+@password_change_guard
+def copy_to_management():
+    """期初計画（または中期計画）の内容を案件管理へコピーする。
+
+    対象部門×期の既存の案件管理データを全削除してから複製する（全置換）。
+    実行できるのは対象部門の編集権を持つ管理者以上。
+    """
+    department, _ = resolve_department()
+    if department is None:
+        abort(403)
+    if not current_user.can_edit_department(department.id):
+        abort(403)
+    period = resolve_period()
+    source_type = request.form.get("source_type")
+    if source_type not in (Project.PLAN_INITIAL, Project.PLAN_MIDTERM):
+        abort(400)
+
+    source_rows = Project.query.filter_by(
+        department_id=department.id, fiscal_period=period, plan_type=source_type
+    ).all()
+
+    # 既存の案件管理データを全削除（全置換）
+    Project.query.filter_by(
+        department_id=department.id, fiscal_period=period,
+        plan_type=Project.PLAN_MANAGEMENT
+    ).delete(synchronize_session=False)
+
+    for src in source_rows:
+        data = {f: getattr(src, f) for f in _COPY_FIELDS}
+        db.session.add(Project(
+            department_id=department.id, fiscal_period=period,
+            plan_type=Project.PLAN_MANAGEMENT,
+            created_by=current_user.user_id, updated_by=current_user.user_id, **data))
+    db.session.commit()
+
+    label = Project.PLAN_TYPE_LABELS[source_type]
+    flash(f"{label}から案件管理へ {len(source_rows)} 件をコピーしました"
+          f"（既存の案件管理データは置き換えました）。", "success")
+    return redirect(url_for("projects.list_projects", dept=department.id,
+                            type=Project.PLAN_MANAGEMENT, period=period))
 
 
 # ---------- エクスポート ----------
-def _download(data: bytes, mimetype: str, ext: str, department):
-    fname = f"案件管理表_{department.name}_{datetime.now().strftime('%Y%m%d')}.{ext}"
+def _download(data: bytes, mimetype: str, ext: str, department, plan_type):
+    label = Project.PLAN_TYPE_LABELS.get(plan_type, "案件管理")
+    fname = f"{label}_{department.name}_{datetime.now().strftime('%Y%m%d')}.{ext}"
     resp = make_response(data)
     resp.headers["Content-Type"] = mimetype
     resp.headers["Content-Disposition"] = f"attachment; filename*=UTF-8''{quote(fname)}"
     return resp
 
 
-def _export_projects(department, period):
+def _export_projects(department, period, plan_type):
     return Project.query.filter_by(
-        department_id=department.id, fiscal_period=period
+        department_id=department.id, fiscal_period=period, plan_type=plan_type
     ).order_by(Project.accounting_month, Project.id).all()
 
 
@@ -304,9 +391,10 @@ def export_csv():
     department, _ = resolve_department()
     if department is None:
         abort(403)
-    rows = _export_projects(department, fiscal.CURRENT_FISCAL_PERIOD)
+    plan_type = _resolve_plan_type()
+    rows = _export_projects(department, resolve_period(), plan_type)
     data = exporters.to_csv(rows)
-    return _download(data, "text/csv; charset=utf-8-sig", "csv", department)
+    return _download(data, "text/csv; charset=utf-8-sig", "csv", department, plan_type)
 
 
 @projects_bp.route("/export.xlsx")
@@ -316,12 +404,13 @@ def export_xlsx():
     department, _ = resolve_department()
     if department is None:
         abort(403)
-    rows = _export_projects(department, fiscal.CURRENT_FISCAL_PERIOD)
+    plan_type = _resolve_plan_type()
+    rows = _export_projects(department, resolve_period(), plan_type)
     data = exporters.to_xlsx(rows)
     return _download(
         data,
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        "xlsx", department)
+        "xlsx", department, plan_type)
 
 
 @projects_bp.route("/export.pdf")
@@ -331,6 +420,8 @@ def export_pdf():
     department, _ = resolve_department()
     if department is None:
         abort(403)
-    rows = _export_projects(department, fiscal.CURRENT_FISCAL_PERIOD)
-    data = exporters.to_pdf(rows, title=f"案件管理表（{department.name}）")
-    return _download(data, "application/pdf", "pdf", department)
+    plan_type = _resolve_plan_type()
+    label = Project.PLAN_TYPE_LABELS.get(plan_type, "案件管理")
+    rows = _export_projects(department, resolve_period(), plan_type)
+    data = exporters.to_pdf(rows, title=f"{label}（{department.name}）")
+    return _download(data, "application/pdf", "pdf", department, plan_type)

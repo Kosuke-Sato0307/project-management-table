@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}{{ plan_type_labels[plan_type] }}インポート - 案件管理システム{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1>{{ plan_type_labels[plan_type] }}インポート<span class="dept-in-title">（{{ department.name }}・{{ period }}期）</span></h1>
+  <a class="btn btn-outline btn-sm" href="{{ url_for('projects.list_projects', dept=department.id, type=plan_type, period=period) }}">← 一覧へ</a>
+</div>
+
+<div class="card">
+  <h2 style="font-size:16px;">1. テンプレートを取得</h2>
+  <p class="text-muted">まずはテンプレートをダウンロードし、これに沿って入力してください。</p>
+  <p>
+    <a class="btn btn-outline" href="{{ url_for('imports.template_xlsx', dept=department.id, type=plan_type, period=period) }}">Excelテンプレート</a>
+    <a class="btn btn-outline" href="{{ url_for('imports.template_csv', dept=department.id, type=plan_type, period=period) }}">CSVテンプレート</a>
+  </p>
+  {% if has_dropdown %}
+  <p class="help-text">Excelテンプレートでは 担当者・区分・カテゴリー・確度 をプルダウンから選べます。金額はカンマ区切りで表示されます。</p>
+  {% endif %}
+</div>
+
+<div class="card">
+  <h2 style="font-size:16px;">2. ファイルを選んで取り込む</h2>
+  <form method="post" action="{{ url_for('imports.preview', dept=department.id, type=plan_type, period=period) }}" enctype="multipart/form-data">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="form-group">
+      <input type="file" name="file" accept=".csv,.xlsx" required>
+    </div>
+    <button type="submit" class="btn">内容を確認する（プレビュー）</button>
+  </form>
+</div>
+
+<div class="card">
+  <h2 style="font-size:16px;">入力のきまり</h2>
+  <ul class="text-muted" style="margin:0; padding-left:20px; line-height:1.9;">
+    <li>1行目は見出し（テンプレートのまま変更しないでください）。2行目以降にデータを入力します。</li>
+    <li><b>計上月</b>（例: <code>2026-09</code>）・<b>案件名</b>は必須です。</li>
+    <li>金額は数字のみ（カンマ可）。担当者・区分・カテゴリー・確度は<b>この部門に登録済みの名称/コード</b>を入力してください。</li>
+    <li>取り込むと、この{{ plan_type_labels[plan_type] }}（{{ department.name }}・{{ period }}期）に<b>新規追加</b>されます。</li>
+    <li>不正な行が1つでもあると、<b>すべて取り込まれません</b>（エラー内容を表示します）。修正して再度お試しください。</li>
+    <li>取込項目: {{ headers | join('、') }}</li>
+  </ul>
+</div>
+{% endblock %}

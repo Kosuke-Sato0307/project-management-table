@@ -194,12 +194,16 @@ class Rank(db.Model):
 
 
 class Kubun(db.Model):
-    """区分マスタ（期初計画 / 新規）。is_plan=True の行が『期初計画値』の集計対象。"""
+    """区分マスタ（期初計画 / 新規）。
+
+    注: 計画/実績の判定は Project.plan_type へ移行したため、is_plan は集計に未使用。
+    区分は案件の自由な分類項目として存続する。
+    """
     __tablename__ = "kubun"
 
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(32), nullable=False, unique=True)
-    # 期初計画（=計画値の集計対象）かどうか
+    # 旧: 期初計画かどうかの判定に使用。現在は集計未使用（plan_type へ移行）。
     is_plan = db.Column(db.Boolean, nullable=False, default=False)
     sort_order = db.Column(db.Integer, nullable=False, default=0)
     is_active = db.Column(db.Boolean, nullable=False, default=True)
@@ -237,13 +241,32 @@ class Project(db.Model):
       担当者 / 区分 / カテゴリー / 案件名 / 確度 / 売上 / 仕入 / 売上総利益 /
       見込み工数 / 対応工数 / 備考
     売上総利益は保存せず、売上−仕入で自動計算する。
+
+    plan_type で3つのデータセットを区別する（計画判定は Kubun.is_plan から plan_type へ移行）:
+      - initial   … 期初計画（計画値）
+      - midterm   … 中期計画（独立した計画値）
+      - management … 案件管理（実績見込み。確度○の行を実績値として算出）
     """
     __tablename__ = "projects"
+
+    # データセット種別
+    PLAN_INITIAL = "initial"
+    PLAN_MIDTERM = "midterm"
+    PLAN_MANAGEMENT = "management"
+    PLAN_TYPES = (PLAN_INITIAL, PLAN_MIDTERM, PLAN_MANAGEMENT)
+    PLAN_TYPE_LABELS = {
+        PLAN_INITIAL: "期初計画",
+        PLAN_MIDTERM: "中期計画",
+        PLAN_MANAGEMENT: "案件管理",
+    }
 
     id = db.Column(db.Integer, primary_key=True)
 
     # 集計軸
     fiscal_period = db.Column(db.Integer, nullable=False, default=59)   # 期（59 など）
+    # データセット種別（期初計画 / 中期計画 / 案件管理）
+    plan_type = db.Column(db.String(16), nullable=False,
+                          default=PLAN_MANAGEMENT, index=True)
     accounting_month = db.Column(db.String(7), nullable=False)         # 計上月 YYYY-MM
     department_id = db.Column(db.Integer, db.ForeignKey("departments.id"), nullable=False)
 
@@ -281,6 +304,21 @@ class Project(db.Model):
     def is_actual(self) -> bool:
         """実績（受注確定 = 確度○）かどうか。"""
         return self.rank is not None and self.rank.is_actual
+
+    @property
+    def is_initial_plan(self) -> bool:
+        """期初計画のデータか。"""
+        return self.plan_type == self.PLAN_INITIAL
+
+    @property
+    def is_midterm_plan(self) -> bool:
+        """中期計画のデータか。"""
+        return self.plan_type == self.PLAN_MIDTERM
+
+    @property
+    def is_management(self) -> bool:
+        """案件管理（実績見込み）のデータか。"""
+        return self.plan_type == self.PLAN_MANAGEMENT
 
 
 class Sga(db.Model):

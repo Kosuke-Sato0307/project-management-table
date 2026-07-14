@@ -1,15 +1,16 @@
 {% extends "base.html" %}
-{% block title %}案件管理表 - 案件管理システム{% endblock %}
+{% block title %}{{ plan_type_labels[plan_type] }} - 案件管理システム{% endblock %}
 {% block content %}
 <div class="page-header">
-  <h1>案件管理表</h1>
+  <h1>{{ plan_type_labels[plan_type] }}</h1>
   {% if department %}
   <div>
-    <a class="btn btn-outline btn-sm" href="{{ url_for('projects.export_csv', dept=department.id) }}">CSV</a>
-    <a class="btn btn-outline btn-sm" href="{{ url_for('projects.export_xlsx', dept=department.id) }}">Excel</a>
-    <a class="btn btn-outline btn-sm" href="{{ url_for('projects.export_pdf', dept=department.id) }}">PDF</a>
+    <a class="btn btn-outline btn-sm" href="{{ url_for('projects.export_csv', dept=department.id, type=plan_type, period=period) }}">CSV</a>
+    <a class="btn btn-outline btn-sm" href="{{ url_for('projects.export_xlsx', dept=department.id, type=plan_type, period=period) }}">Excel</a>
+    <a class="btn btn-outline btn-sm" href="{{ url_for('projects.export_pdf', dept=department.id, type=plan_type, period=period) }}">PDF</a>
     {% if can_edit %}
-    <a class="btn" href="{{ url_for('projects.new', dept=department.id) }}">＋ 案件を登録</a>
+    <a class="btn btn-outline btn-sm" href="{{ url_for('imports.upload_page', dept=department.id, type=plan_type, period=period) }}">インポート</a>
+    <a class="btn" href="{{ url_for('projects.new', dept=department.id, type=plan_type, period=period) }}">＋ 案件を登録</a>
     {% endif %}
   </div>
   {% endif %}
@@ -21,16 +22,46 @@
 
 <div class="card dept-bar">
   <form method="get" action="{{ url_for('projects.list_projects') }}">
+    <input type="hidden" name="type" value="{{ plan_type }}">
     <label style="display:inline-block; margin-right:8px;">部門</label>
     <select name="dept" onchange="this.form.submit()" style="max-width:280px; display:inline-block; width:auto;">
       {% for d in viewable %}
       <option value="{{ d.id }}" {% if d.id == department.id %}selected{% endif %}>{{ d.name }}</option>
       {% endfor %}
     </select>
+    <label style="display:inline-block; margin:0 8px 0 12px;">期</label>
+    <select name="period" onchange="this.form.submit()" style="display:inline-block; width:auto;">
+      {% for p in periods %}
+      <option value="{{ p }}" {% if p == period %}selected{% endif %}>{{ p }}期</option>
+      {% endfor %}
+    </select>
     <span class="period-tag">{{ period_label }}</span>
   </form>
 </div>
 
+<div class="tabs">
+  {% for pt, label in plan_type_labels.items() %}
+  <a class="tab {% if plan_type == pt %}active{% endif %}"
+     href="{{ url_for('projects.list_projects', dept=department.id, type=pt, period=period) }}">{{ label }}</a>
+  {% endfor %}
+</div>
+
+{% if plan_type != 'management' and can_edit %}
+<div class="card copy-bar">
+  <form method="post" action="{{ url_for('projects.copy_to_management', dept=department.id, period=period) }}"
+        onsubmit="return confirm('{{ plan_type_labels[plan_type] }}の内容を案件管理へコピーします。\n案件管理の既存データ（この部門・{{ period }}期）は削除して置き換えられます。よろしいですか？');">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="source_type" value="{{ plan_type }}">
+    <button type="submit" class="btn btn-outline btn-sm">案件管理へコピー（既存を置換）</button>
+    <span class="help-text">この{{ plan_type_labels[plan_type] }}を案件管理側に複製し、以降は案件管理で編集します。</span>
+  </form>
+</div>
+{% endif %}
+
+{% set has_any = months_data | selectattr('cases') | list | length > 0 %}
+{% if not has_any %}
+  <div class="card"><p class="text-muted">この{{ plan_type_labels[plan_type] }}（{{ department.name }}・{{ period }}期）のデータはまだありません。</p></div>
+{% endif %}
 {% for g in months_data %}
   {% if g.cases %}
   <div class="month-block">
@@ -42,6 +73,12 @@
     </div>
     <div class="table-wrap">
       <table class="table table-cases">
+        <colgroup>
+          <col style="width:8%"><col style="width:6%"><col style="width:6%">
+          <col style="width:18%"><col style="width:4%"><col style="width:8%">
+          <col style="width:8%"><col style="width:9%"><col style="width:7%">
+          <col style="width:7%"><col style="width:12%"><col style="width:7%">
+        </colgroup>
         <thead>
           <tr>
             <th>担当者</th><th>区分</th><th>カテゴリー</th><th>案件名</th><th>確度</th>
@@ -55,7 +92,7 @@
             <td>{{ p.assignee.name if p.assignee else '' }}</td>
             <td>{{ p.kubun.name if p.kubun else '' }}</td>
             <td>{{ p.category.code if p.category else '' }}</td>
-            <td>{{ p.project_name }}</td>
+            <td class="wrap-cell">{{ p.project_name }}</td>
             <td>{{ p.rank.name if p.rank else '' }}</td>
             <td class="num-col">{{ p.sales | yen }}</td>
             <td class="num-col">{{ p.cost | yen }}</td>
@@ -77,8 +114,6 @@
     </div>
   </div>
   {% endif %}
-{% else %}
-  <div class="card"><p class="text-muted">この部門の案件はまだありません。</p></div>
 {% endfor %}
 
 {% endif %}

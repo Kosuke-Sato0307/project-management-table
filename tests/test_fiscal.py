@@ -1,10 +1,31 @@
 """会計期ヘルパー（fiscal.py）のテスト。"""
+from datetime import date
+
 from app import fiscal
 
 
 def test_period_start_year():
     assert fiscal.period_start_year(59) == 2026
     assert fiscal.period_start_year(60) == 2027
+
+
+def test_default_fiscal_period():
+    # 本来58期の期間でも59でフロア（試験運用のため59期を先行表示）
+    assert fiscal.default_fiscal_period(date(2026, 7, 14)) == 59
+    assert fiscal.default_fiscal_period(date(2026, 8, 31)) == 59
+    # 9/1 を境に自然な期へ
+    assert fiscal.default_fiscal_period(date(2026, 9, 1)) == 59
+    assert fiscal.default_fiscal_period(date(2027, 8, 31)) == 59
+    assert fiscal.default_fiscal_period(date(2027, 9, 1)) == 60
+    assert fiscal.default_fiscal_period(date(2028, 9, 1)) == 61
+
+
+def test_selectable_periods():
+    ps = fiscal.selectable_periods()
+    assert 59 in ps
+    assert ps == sorted(ps)          # 昇順
+    # DB上に存在する期（過去期など）は和集合で含める
+    assert 58 in fiscal.selectable_periods([58])
 
 
 def test_months_order():

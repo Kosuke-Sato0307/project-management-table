@@ -13,7 +13,7 @@ from flask_login import login_required, current_user
 
 from ..extensions import db
 from ..models import Project, Rank, Category, Sga
-from ..decorators import password_change_guard, resolve_department
+from ..decorators import password_change_guard, resolve_department, resolve_period
 from .. import fiscal
 from . import calc
 
@@ -34,12 +34,18 @@ def _sga_by_month(department, period):
 def _common(view):
     """各画面共通の部門・期・タブ情報を返す。department が None なら (None, ctx)。"""
     department, viewable = resolve_department()
-    period = fiscal.CURRENT_FISCAL_PERIOD
+    period = resolve_period()
+    extra = None
+    if department is not None:
+        rows = db.session.query(Project.fiscal_period).filter_by(
+            department_id=department.id).distinct().all()
+        extra = [r[0] for r in rows]
     ctx = {
         "department": department,
         "viewable": viewable,
         "period": period,
         "period_label": fiscal.period_label(period),
+        "periods": fiscal.selectable_periods(extra),
         "active_view": view,
     }
     return department, ctx
@@ -140,7 +146,7 @@ def sga():
                     amount = int(raw)
                 except ValueError:
                     flash(f"{fiscal.month_label(m)} の販管費は数字で入力してください。", "danger")
-                    return redirect(url_for("analytics.sga", dept=department.id))
+                    return redirect(url_for("analytics.sga", dept=department.id, period=period))
             row = existing.get(m)
             if row is None:
                 db.session.add(Sga(department_id=department.id, fiscal_period=period,
@@ -149,7 +155,7 @@ def sga():
                 row.amount = amount
         db.session.commit()
         flash("販管費を保存しました。", "success")
-        return redirect(url_for("analytics.sga", dept=department.id))
+        return redirect(url_for("analytics.sga", dept=department.id, period=period))
 
     sga_map = _sga_by_month(department, period)
     # 集計（四半期/半期/通期）
