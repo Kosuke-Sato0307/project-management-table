@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block title %}カテゴリー管理 - 案件管理システム{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1>カテゴリー管理</h1>
+  <a class="btn btn-sm btn-outline" href="{{ url_for('admin.users') }}">← ユーザー管理へ</a>
+</div>
+
+<div class="card">
+  <form method="get" action="{{ url_for('admin.categories') }}" class="search-form">
+    <div class="form-group" style="max-width:320px;">
+      <label>部門</label>
+      <select name="dept" onchange="this.form.submit()">
+        {% for d in departments %}
+        <option value="{{ d.id }}" {% if department and d.id == department.id %}selected{% endif %}>{{ d.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+  </form>
+</div>
+
+{% if department %}
+<div class="card">
+  <h2 style="font-size:17px;">{{ department.name }} のカテゴリー</h2>
+  <div class="table-wrap">
+    <table class="table">
+      <thead>
+        <tr><th>コード</th><th>名称</th><th>状態</th><th>操作</th></tr>
+      </thead>
+      <tbody>
+        {% for c in categories %}
+        <tr>
+          <td>{{ c.code }}</td>
+          <td>{{ c.name }}</td>
+          <td>{% if c.is_active %}<span style="color:var(--success)">有効</span>{% else %}<span class="status-off">無効</span>{% endif %}</td>
+          <td>
+            <form class="inline-form" method="post" action="{{ url_for('admin.toggle_category', category_id=c.id) }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button type="submit" class="btn btn-sm {% if c.is_active %}btn-danger{% else %}btn-outline{% endif %}">
+                {% if c.is_active %}無効化{% else %}有効化{% endif %}
+              </button>
+            </form>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="4" class="text-muted" style="text-align:center; padding:16px;">カテゴリーがありません。</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <h3 style="font-size:15px; margin-top:20px;">カテゴリーを追加</h3>
+  <form method="post" action="{{ url_for('admin.categories', dept=department.id) }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="form-grid">
+      <div class="form-group">
+        <label>コード <span class="text-danger">*</span></label>
+        <input type="text" name="code" placeholder="例: Ri" required>
+      </div>
+      <div class="form-group">
+        <label>名称 <span class="text-danger">*</span></label>
+        <input type="text" name="name" placeholder="例: Ribbon Communications関連" required>
+      </div>
+    </div>
+    <button type="submit" class="btn">追加する</button>
+  </form>
+</div>
+{% endif %}
+{% endblock %}

@@ -39,13 +39,13 @@ def create_app(config_object=Config) -> Flask:
     from .admin.routes import admin_bp
     from .main.routes import main_bp
     from .projects.routes import projects_bp
-    from .imports.routes import imports_bp
+    from .analytics.routes import analytics_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(admin_bp)
     app.register_blueprint(main_bp)
     app.register_blueprint(projects_bp)
-    app.register_blueprint(imports_bp)
+    app.register_blueprint(analytics_bp)
 
     # CLI コマンド（初期管理者作成・マスタ初期投入）
     from .cli import register_cli
@@ -87,6 +87,16 @@ def _register_template_helpers(app: Flask) -> None:
         if hasattr(value, "year"):
             return f"{value.year}/{value.month}/{value.day}"
         return str(value)
+
+    @app.template_filter("pct")
+    def pct(value):
+        """達成率・粗利率などを '85.3%' 形式で表示。None は '—'。"""
+        if value is None:
+            return "—"
+        try:
+            return f"{float(value):.1f}%"
+        except (ValueError, TypeError):
+            return str(value)
 
     @app.template_filter("ym")
     def ym(value):

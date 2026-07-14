@@ -3,7 +3,10 @@
 {% block content %}
 <div class="page-header">
   <h1>ユーザー管理</h1>
-  <a class="btn" href="{{ url_for('admin.new_user') }}">＋ ユーザーを登録</a>
+  <div>
+    <a class="btn btn-outline" href="{{ url_for('admin.categories') }}">カテゴリー管理</a>
+    <a class="btn" href="{{ url_for('admin.new_user') }}">＋ ユーザーを登録</a>
+  </div>
 </div>
 
 <div class="table-wrap">
@@ -13,6 +16,7 @@
         <th>ログインID</th>
         <th>氏名</th>
         <th>権限</th>
+        <th>所属部門</th>
         <th>状態</th>
         <th>登録日</th>
         <th>操作</th>
@@ -23,14 +27,13 @@
       <tr>
         <td>{{ u.user_id }}</td>
         <td>{{ u.name }}</td>
+        <td>{{ u.role_label }}</td>
         <td>
-          <form class="inline-form" method="post" action="{{ url_for('admin.change_role', user_id=u.user_id) }}">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <select name="role" onchange="this.form.submit()">
-              <option value="user"  {% if u.role == 'user'  %}selected{% endif %}>一般</option>
-              <option value="admin" {% if u.role == 'admin' %}selected{% endif %}>管理者</option>
-            </select>
-          </form>
+          {% for d in u.departments %}
+            <span class="badge badge-dept">{{ d.name }}</span>
+          {% else %}
+            <span class="text-muted">—</span>
+          {% endfor %}
         </td>
         <td>
           {% if u.is_active %}
@@ -43,7 +46,8 @@
           {% endif %}
         </td>
         <td>{{ u.created_at | jst }}</td>
-        <td>
+        <td class="nowrap">
+          <a class="btn btn-sm btn-outline" href="{{ url_for('admin.edit_user', user_id=u.user_id) }}">編集</a>
           <form class="inline-form" method="post" action="{{ url_for('admin.reset_password', user_id=u.user_id) }}"
                 onsubmit="return confirm('{{ u.name }} のパスワードをリセットしますか？');">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">

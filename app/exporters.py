@@ -14,31 +14,36 @@ JST = timezone(timedelta(hours=9))
 
 # (見出し, 属性, 種別)
 COLUMNS = [
-    ("案件番号", "project_no", "text"),
+    ("計上月", "accounting_month", "month"),
+    ("担当者", "assignee", "assignee"),
+    ("区分", "kubun", "kubun"),
+    ("カテゴリー", "category", "category"),
     ("案件名", "project_name", "text"),
-    ("顧客名", "customer_name", "text"),
-    ("ステータス", "status", "status"),
     ("確度", "rank", "rank"),
-    ("見積番号", "estimate_no", "text"),
-    ("金額(税抜)", "amount_excl_tax", "int"),
-    ("完成月", "completion_month", "month"),
-    ("受注日", "order_date", "date"),
-    ("営業担当者", "sales_rep", "text"),
-    ("部署", "department", "text"),
-    ("備考メモ", "notes", "text"),
+    ("売上", "sales", "int"),
+    ("仕入", "cost", "int"),
+    ("売上総利益", "gross_profit", "int"),
+    ("見込み工数", "estimated_hours", "float"),
+    ("対応工数", "actual_hours", "float"),
+    ("備考", "notes", "text"),
     ("作成日時", "created_at", "datetime"),
     ("作成者", "created_by", "text"),
     ("編集日時", "updated_at", "datetime"),
     ("編集者", "updated_by", "text"),
 ]
 
-PDF_COLUMNS = ["案件番号", "案件名", "顧客名", "ステータス", "確度", "金額(税抜)", "完成月"]
+PDF_COLUMNS = ["計上月", "担当者", "区分", "カテゴリー", "案件名", "確度",
+               "売上", "仕入", "売上総利益"]
 
 
 # ---------- 値の取り出し・整形 ----------
 def _raw(p, attr, kind):
-    if kind == "status":
-        return p.status.name if p.status else None
+    if kind == "assignee":
+        return p.assignee.name if p.assignee else None
+    if kind == "kubun":
+        return p.kubun.name if p.kubun else None
+    if kind == "category":
+        return p.category.code if p.category else None
     if kind == "rank":
         return p.rank.name if p.rank else None
     return getattr(p, attr)
@@ -71,6 +76,8 @@ def _text_value(p, attr, kind):
     v = _raw(p, attr, kind)
     if kind == "int":
         return "" if v is None else f"{v:,}"
+    if kind == "float":
+        return "" if v is None else (f"{v:g}")
     if kind == "date":
         return _fmt_ymd(v)
     if kind == "month":
@@ -111,7 +118,7 @@ def to_xlsx(projects) -> bytes:
         row = []
         for _, attr, kind in COLUMNS:
             v = _raw(p, attr, kind)
-            if kind == "int":
+            if kind in ("int", "float"):
                 row.append(v)                       # 数値のまま
             elif kind == "date":
                 row.append(v)                       # 実日付
@@ -127,8 +134,8 @@ def to_xlsx(projects) -> bytes:
     for i, (h, _, kind) in enumerate(COLUMNS, start=1):
         letter = get_column_letter(i)
         ws.column_dimensions[letter].width = max(12, len(h) * 2 + 2)
-        if kind in ("int", "date", "month"):
-            fmt = {"int": "#,##0", "date": "yyyy/m/d", "month": "@"}[kind]
+        if kind in ("int", "float", "date", "month"):
+            fmt = {"int": "#,##0", "float": "0.#", "date": "yyyy/m/d", "month": "@"}[kind]
             for row in ws.iter_rows(min_row=2, min_col=i, max_col=i):
                 for cell in row:
                     cell.number_format = fmt
@@ -195,22 +202,27 @@ def to_pdf(projects, title="案件一覧") -> bytes:
         data.append(row)
 
     total_w = 277 * mm
-    weights = {"案件番号": 1.1, "案件名": 2.4, "顧客名": 1.8, "ステータス": 1.0,
-               "確度": 0.7, "金額(税抜)": 1.2, "完成月": 0.9}
+    weights = {"計上月": 0.9, "担当者": 1.1, "区分": 0.9, "カテゴリー": 0.8,
+               "案件名": 2.4, "確度": 0.6, "売上": 1.2, "仕入": 1.2, "売上総利益": 1.2}
     wsum = sum(weights[h] for h in PDF_COLUMNS)
     col_widths = [total_w * weights[h] / wsum for h in PDF_COLUMNS]
-    amount_col = PDF_COLUMNS.index("金額(税抜)")
+    # 金額系の列は右寄せ
+    num_headers = {"売上", "仕入", "売上総利益"}
+    num_cols = [PDF_COLUMNS.index(h) for h in PDF_COLUMNS if h in num_headers]
 
-    table = Table(data, colWidths=col_widths, repeatRows=1)
-    table.setStyle(TableStyle([
+    style = [
         ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#2563EB")),
         ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#cccccc")),
         ("VALIGN", (0, 0), (-1, -1), "TOP"),
         ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#f5f7fa")]),
-        ("ALIGN", (amount_col, 1), (amount_col, -1), "RIGHT"),
         ("TOPPADDING", (0, 0), (-1, -1), 3),
         ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
-    ]))
+    ]
+    for c in num_cols:
+        style.append(("ALIGN", (c, 1), (c, -1), "RIGHT"))
+
+    table = Table(data, colWidths=col_widths, repeatRows=1)
+    table.setStyle(TableStyle(style))
 
     elems = [
         Paragraph(title, title_style),

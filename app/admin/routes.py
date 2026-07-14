@@ -1,15 +1,17 @@
-"""管理者用: ユーザー管理。
+"""システム管理者用: ユーザー管理・マスタ管理。
 
 ユーザーの一覧・新規登録（初期パスワード発行）・パスワードリセット・
-有効/無効の切替・権限変更を行う。管理者のみアクセス可能。
+有効/無効の切替・権限変更・所属部門の割り当てを行う。
+カテゴリーマスタ（部門別）の追加/編集/無効化もここで扱う。
+いずれもシステム管理者のみアクセス可能。
 """
 from flask import (Blueprint, render_template, request, redirect, url_for,
                    flash)
 from flask_login import current_user
 
 from ..extensions import db
-from ..models import User
-from ..decorators import admin_required
+from ..models import User, Department, Category, VALID_ROLES, ROLE_USER
+from ..decorators import sysadmin_required
 
 admin_bp = Blueprint("admin", __name__, url_prefix="/admin")
 
@@ -17,33 +19,48 @@ admin_bp = Blueprint("admin", __name__, url_prefix="/admin")
 INITIAL_PASSWORD = "P@ssw0rd"
 
 
+def _selected_departments():
+    """フォームから選択された部門ID群を有効な Department リストにして返す。"""
+    ids = request.form.getlist("department_ids", type=int)
+    if not ids:
+        return []
+    return Department.query.filter(
+        Department.id.in_(ids), Department.is_active.is_(True)
+    ).all()
+
+
 @admin_bp.route("/users")
-@admin_required
+@sysadmin_required
 def users():
     all_users = User.query.order_by(User.created_at.asc()).all()
     return render_template("admin/users.html", users=all_users)
 
 
 @admin_bp.route("/users/new", methods=["GET", "POST"])
-@admin_required
+@sysadmin_required
 def new_user():
+    departments = Department.query.filter_by(is_active=True) \
+        .order_by(Department.sort_order).all()
     if request.method == "POST":
         user_id = (request.form.get("user_id") or "").strip()
         name = (request.form.get("name") or "").strip()
-        role = request.form.get("role") or "user"
+        role = request.form.get("role") or ROLE_USER
 
         if not user_id or not name:
             flash("ログインIDと氏名は必須です。", "danger")
-            return render_template("admin/user_form.html")
-        if role not in ("user", "admin"):
-            role = "user"
+            return render_template("admin/user_form.html", departments=departments,
+                                   form=request.form)
+        if role not in VALID_ROLES:
+            role = ROLE_USER
         if db.session.get(User, user_id):
             flash(f"ログインID '{user_id}' は既に使われています。", "danger")
-            return render_template("admin/user_form.html")
+            return render_template("admin/user_form.html", departments=departments,
+                                   form=request.form)
 
         user = User(user_id=user_id, name=name, role=role,
                     is_active_flag=True, must_change_password=True)
         user.set_password(INITIAL_PASSWORD)
+        user.departments = _selected_departments()
         db.session.add(user)
         db.session.commit()
 
@@ -52,11 +69,50 @@ def new_user():
               f"（初回ログイン時に変更が必要です）。", "success")
         return redirect(url_for("admin.users"))
 
-    return render_template("admin/user_form.html")
+    return render_template("admin/user_form.html", departments=departments, form={})
+
+
+@admin_bp.route("/users/<user_id>/edit", methods=["GET", "POST"])
+@sysadmin_required
+def edit_user(user_id):
+    user = db.session.get(User, user_id)
+    if user is None:
+        flash("対象ユーザーが見つかりません。", "danger")
+        return redirect(url_for("admin.users"))
+    departments = Department.query.filter_by(is_active=True) \
+        .order_by(Department.sort_order).all()
+
+    if request.method == "POST":
+        name = (request.form.get("name") or "").strip()
+        role = request.form.get("role") or ROLE_USER
+        if not name:
+            flash("氏名は必須です。", "danger")
+            return render_template("admin/user_edit.html", user=user,
+                                   departments=departments)
+        if role not in VALID_ROLES:
+            role = ROLE_USER
+        # 最後のシステム管理者を降格させない安全策
+        if user.is_sysadmin and role != "sysadmin":
+            others = User.query.filter_by(role="sysadmin", is_active_flag=True) \
+                .filter(User.user_id != user.user_id).count()
+            if others == 0:
+                flash("システム管理者が1人だけのため、権限を変更できません。", "danger")
+                return render_template("admin/user_edit.html", user=user,
+                                       departments=departments)
+
+        user.name = name
+        user.role = role
+        user.departments = _selected_departments()
+        db.session.commit()
+        flash(f"'{user.name}' の情報を更新しました。", "success")
+        return redirect(url_for("admin.users"))
+
+    return render_template("admin/user_edit.html", user=user,
+                           departments=departments)
 
 
 @admin_bp.route("/users/<user_id>/reset-password", methods=["POST"])
-@admin_required
+@sysadmin_required
 def reset_password(user_id):
     user = db.session.get(User, user_id)
     if user is None:
@@ -72,7 +128,7 @@ def reset_password(user_id):
 
 
 @admin_bp.route("/users/<user_id>/toggle-active", methods=["POST"])
-@admin_required
+@sysadmin_required
 def toggle_active(user_id):
     user = db.session.get(User, user_id)
     if user is None:
@@ -89,25 +145,50 @@ def toggle_active(user_id):
     return redirect(url_for("admin.users"))
 
 
-@admin_bp.route("/users/<user_id>/role", methods=["POST"])
-@admin_required
-def change_role(user_id):
-    user = db.session.get(User, user_id)
-    if user is None:
-        flash("対象ユーザーが見つかりません。", "danger")
-        return redirect(url_for("admin.users"))
-    new_role = request.form.get("role")
-    if new_role not in ("user", "admin"):
-        flash("不正な権限です。", "danger")
-        return redirect(url_for("admin.users"))
-    # 最後の管理者を一般ユーザーに降格させない安全策
-    if user.is_admin and new_role == "user":
-        admin_count = User.query.filter_by(role="admin", is_active_flag=True).count()
-        if admin_count <= 1:
-            flash("管理者が1人だけのため、権限を変更できません。", "danger")
-            return redirect(url_for("admin.users"))
+# ---------- カテゴリーマスタ（部門別） ----------
+@admin_bp.route("/categories", methods=["GET", "POST"])
+@sysadmin_required
+def categories():
+    departments = Department.query.filter_by(is_active=True) \
+        .order_by(Department.sort_order).all()
+    dept_id = request.values.get("dept", type=int)
+    department = None
+    if dept_id is not None:
+        department = db.session.get(Department, dept_id)
+    elif departments:
+        department = departments[0]
 
-    user.role = new_role
+    if request.method == "POST" and department is not None:
+        code = (request.form.get("code") or "").strip()
+        name = (request.form.get("name") or "").strip()
+        if not code or not name:
+            flash("コードと名称は必須です。", "danger")
+        else:
+            max_order = db.session.query(db.func.max(Category.sort_order)) \
+                .filter_by(department_id=department.id).scalar() or 0
+            db.session.add(Category(department_id=department.id, code=code,
+                                    name=name, sort_order=max_order + 1))
+            db.session.commit()
+            flash(f"カテゴリー '{code}（{name}）' を追加しました。", "success")
+        return redirect(url_for("admin.categories", dept=department.id))
+
+    items = []
+    if department is not None:
+        items = Category.query.filter_by(department_id=department.id) \
+            .order_by(Category.sort_order).all()
+    return render_template("admin/categories.html", departments=departments,
+                           department=department, categories=items)
+
+
+@admin_bp.route("/categories/<int:category_id>/toggle-active", methods=["POST"])
+@sysadmin_required
+def toggle_category(category_id):
+    cat = db.session.get(Category, category_id)
+    if cat is None:
+        flash("対象カテゴリーが見つかりません。", "danger")
+        return redirect(url_for("admin.categories"))
+    cat.is_active = not cat.is_active
     db.session.commit()
-    flash(f"'{user.name}' の権限を変更しました。", "info")
-    return redirect(url_for("admin.users"))
+    state = "有効化" if cat.is_active else "無効化"
+    flash(f"カテゴリー '{cat.code}' を{state}しました。", "info")
+    return redirect(url_for("admin.categories", dept=cat.department_id))

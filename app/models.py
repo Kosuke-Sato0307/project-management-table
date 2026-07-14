@@ -1,9 +1,11 @@
 """データベースのモデル定義（テーブル構造）。
 
-拡張性方針:
-  - 選択肢（案件ステータス・確度ランク）は「マスタテーブル」に切り出し、
-    値の増減はコード変更なし（マスタ管理画面/シード）で行えるようにする。
-  - 項目（カラム）の追加は Alembic マイグレーションで安全に行う。
+59期リニューアルの設計方針:
+  - 案件(Project)は「案件番号」ではなく整数IDを主キーとする（案件番号未発行の案件も
+    集計できるように）。案件は必ず「部門」と「計上月(YYYY-MM)」を持つ。
+  - 権限は3段階（システム管理者 / 管理者=部門長 / 一般）。ユーザーと部門は多対多。
+  - 選択肢（確度・区分・カテゴリー）は「マスタテーブル」に切り出し、コード変更なしで
+    増減できるようにする。カテゴリーは部門ごとに異なりうるため部門に紐づける。
 """
 from datetime import datetime, timezone
 
@@ -18,6 +20,27 @@ def _now() -> datetime:
     return datetime.now(timezone.utc)
 
 
+# ---- 権限（ロール）定数 ----
+ROLE_SYSADMIN = "sysadmin"   # システム管理者：全権（ユーザー/システム管理）
+ROLE_ADMIN = "admin"         # 管理者：部門長クラス。全部門を閲覧、自部門のみ編集
+ROLE_USER = "user"           # 一般：自部門を閲覧、自分が担当の案件のみ編集
+
+ROLE_LABELS = {
+    ROLE_SYSADMIN: "システム管理者",
+    ROLE_ADMIN: "管理者",
+    ROLE_USER: "一般ユーザー",
+}
+VALID_ROLES = (ROLE_SYSADMIN, ROLE_ADMIN, ROLE_USER)
+
+
+# ユーザーと部門の多対多（1ユーザーに複数部門を割り当て可能）
+user_departments = db.Table(
+    "user_departments",
+    db.Column("user_id", db.String(64), db.ForeignKey("users.user_id"), primary_key=True),
+    db.Column("department_id", db.Integer, db.ForeignKey("departments.id"), primary_key=True),
+)
+
+
 class User(UserMixin, db.Model):
     """ログインユーザー。管理者が事前登録する。"""
     __tablename__ = "users"
@@ -28,13 +51,20 @@ class User(UserMixin, db.Model):
     name = db.Column(db.String(128), nullable=False)
     # bcrypt でハッシュ化したパスワード
     password_hash = db.Column(db.String(255), nullable=False)
-    # 権限: "admin"（管理者） / "user"（一般）
-    role = db.Column(db.String(16), nullable=False, default="user")
+    # 権限: sysadmin / admin / user
+    role = db.Column(db.String(16), nullable=False, default=ROLE_USER)
     # 有効/無効（退職者などは無効化してログイン不可にする）
     is_active_flag = db.Column(db.Boolean, nullable=False, default=True)
     # 初回ログイン時にパスワード変更を強制するフラグ
     must_change_password = db.Column(db.Boolean, nullable=False, default=True)
     created_at = db.Column(db.DateTime, nullable=False, default=_now)
+
+    # 所属部門（多対多）
+    departments = db.relationship(
+        "Department", secondary=user_departments,
+        order_by="Department.sort_order",
+        backref=db.backref("members", order_by="User.user_id"),
+    )
 
     # ---- パスワード関連ヘルパー ----
     def set_password(self, raw_password: str) -> None:
@@ -50,9 +80,78 @@ class User(UserMixin, db.Model):
         except (ValueError, AttributeError):
             return False
 
+    # ---- 権限判定 ----
+    @property
+    def is_sysadmin(self) -> bool:
+        return self.role == ROLE_SYSADMIN
+
+    @property
+    def is_manager(self) -> bool:
+        """管理者（部門長）。"""
+        return self.role == ROLE_ADMIN
+
     @property
     def is_admin(self) -> bool:
-        return self.role == "admin"
+        """システム管理者 or 管理者（＝一般ユーザーより上位）。"""
+        return self.role in (ROLE_SYSADMIN, ROLE_ADMIN)
+
+    @property
+    def role_label(self) -> str:
+        return ROLE_LABELS.get(self.role, self.role)
+
+    @property
+    def department_ids(self) -> set[int]:
+        return {d.id for d in self.departments}
+
+    def viewable_departments(self):
+        """閲覧できる部門の一覧（sort順）。
+
+        システム管理者・管理者は全部門、一般は自部門のみ。
+        """
+        if self.role in (ROLE_SYSADMIN, ROLE_ADMIN):
+            return Department.query.filter_by(is_active=True) \
+                .order_by(Department.sort_order).all()
+        return sorted(self.departments, key=lambda d: d.sort_order)
+
+    def editable_departments(self):
+        """『部門単位で』編集できる部門の一覧（販管費入力・部門の案件編集の判定に使う）。
+
+        システム管理者は全部門、管理者・一般は自部門のみ。
+        （一般は部門単位の編集権は無いが、自部門として編集画面に入る起点に使う。）
+        """
+        if self.role == ROLE_SYSADMIN:
+            return Department.query.filter_by(is_active=True) \
+                .order_by(Department.sort_order).all()
+        return sorted(self.departments, key=lambda d: d.sort_order)
+
+    def can_view_department(self, department_id: int) -> bool:
+        if self.role in (ROLE_SYSADMIN, ROLE_ADMIN):
+            return True
+        return department_id in self.department_ids
+
+    def can_edit_department(self, department_id: int) -> bool:
+        """部門の販管費など『部門単位』の編集可否。"""
+        if self.role == ROLE_SYSADMIN:
+            return True
+        if self.role == ROLE_ADMIN:
+            return department_id in self.department_ids
+        return False
+
+    def can_view_project(self, project) -> bool:
+        return self.can_view_department(project.department_id)
+
+    def can_edit_project(self, project) -> bool:
+        """案件の編集/削除可否。
+
+        - システム管理者: すべて
+        - 管理者: 自分の紐づく部門の案件
+        - 一般: 自分が担当として登録されている案件のみ
+        """
+        if self.role == ROLE_SYSADMIN:
+            return True
+        if self.role == ROLE_ADMIN:
+            return project.department_id in self.department_ids
+        return project.assignee_user_id == self.user_id
 
     # ---- Flask-Login が要求するインターフェース ----
     def get_id(self) -> str:
@@ -63,35 +162,8 @@ class User(UserMixin, db.Model):
         return bool(self.is_active_flag)
 
 
-class Status(db.Model):
-    """案件ステータスのマスタ（進行中/受注/失注/完了 …）。"""
-    __tablename__ = "statuses"
-
-    id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(64), nullable=False, unique=True)
-    # 表示順（小さいほど先頭）
-    sort_order = db.Column(db.Integer, nullable=False, default=0)
-    is_active = db.Column(db.Boolean, nullable=False, default=True)
-
-    projects = db.relationship("Project", back_populates="status")
-
-
-class Rank(db.Model):
-    """確度ランクのマスタ（A/B/C … ）。"""
-    __tablename__ = "ranks"
-
-    id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(16), nullable=False, unique=True)
-    sort_order = db.Column(db.Integer, nullable=False, default=0)
-    # 任意: ランクの意味メモ（例: "A=受注確実 80%以上"）
-    note = db.Column(db.String(128), nullable=True)
-    is_active = db.Column(db.Boolean, nullable=False, default=True)
-
-    projects = db.relationship("Project", back_populates="rank")
-
-
 class Department(db.Model):
-    """部署のマスタ（第1営業部/大阪支店 …）。案件では名称を文字列で保持する。"""
+    """部門のマスタ（第2営業部 など）。案件・ユーザー・販管費が紐づく。"""
     __tablename__ = "departments"
 
     id = db.Column(db.Integer, primary_key=True)
@@ -100,22 +172,93 @@ class Department(db.Model):
     is_active = db.Column(db.Boolean, nullable=False, default=True)
 
 
+class Rank(db.Model):
+    """確度ランクのマスタ（○ / A / B / … / ×）。'○' を実績（受注確定）とみなす。"""
+    __tablename__ = "ranks"
+
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(16), nullable=False, unique=True)
+    sort_order = db.Column(db.Integer, nullable=False, default=0)
+    # 任意: ランクの意味メモ（例: "○=受注確定"）
+    note = db.Column(db.String(128), nullable=True)
+    is_active = db.Column(db.Boolean, nullable=False, default=True)
+
+    projects = db.relationship("Project", back_populates="rank")
+
+    # 実績（受注確定）とみなす確度の名称
+    ACTUAL_NAME = "○"
+
+    @property
+    def is_actual(self) -> bool:
+        return self.name == self.ACTUAL_NAME
+
+
+class Kubun(db.Model):
+    """区分マスタ（期初計画 / 新規）。is_plan=True の行が『期初計画値』の集計対象。"""
+    __tablename__ = "kubun"
+
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(32), nullable=False, unique=True)
+    # 期初計画（=計画値の集計対象）かどうか
+    is_plan = db.Column(db.Boolean, nullable=False, default=False)
+    sort_order = db.Column(db.Integer, nullable=False, default=0)
+    is_active = db.Column(db.Boolean, nullable=False, default=True)
+
+    projects = db.relationship("Project", back_populates="kubun")
+
+    # 期初計画の区分名
+    PLAN_NAME = "期初計画"
+
+
+class Category(db.Model):
+    """カテゴリーマスタ（Ri=Ribbon Communications関連 など）。部門ごとに定義できる。"""
+    __tablename__ = "categories"
+
+    id = db.Column(db.Integer, primary_key=True)
+    department_id = db.Column(db.Integer, db.ForeignKey("departments.id"), nullable=True)
+    code = db.Column(db.String(16), nullable=False)      # Ri / Or / Au / Kd / NM / Ot
+    name = db.Column(db.String(128), nullable=False)     # 名称（Ribbon Communications関連 等）
+    sort_order = db.Column(db.Integer, nullable=False, default=0)
+    is_active = db.Column(db.Boolean, nullable=False, default=True)
+
+    department = db.relationship("Department")
+    projects = db.relationship("Project", back_populates="category")
+
+    @property
+    def display_name(self) -> str:
+        """'Ri（Ribbon Communications関連）' 形式。"""
+        return f"{self.code}（{self.name}）"
+
+
 class Project(db.Model):
-    """案件。案件番号を主キーとする（手入力・重複はDBの一意制約で担保）。"""
+    """案件。整数IDを主キーとし、部門・計上月ごとに集計する。
+
+    列の並び（画面表示順）は依頼どおり:
+      担当者 / 区分 / カテゴリー / 案件名 / 確度 / 売上 / 仕入 / 売上総利益 /
+      見込み工数 / 対応工数 / 備考
+    売上総利益は保存せず、売上−仕入で自動計算する。
+    """
     __tablename__ = "projects"
 
-    project_no = db.Column(db.String(64), primary_key=True)          # 案件番号
-    project_name = db.Column(db.String(255), nullable=False)         # 案件名
-    customer_name = db.Column(db.String(255), nullable=True)         # 顧客名/取引先
-    status_id = db.Column(db.Integer, db.ForeignKey("statuses.id"), nullable=True)  # 案件ステータス
-    rank_id = db.Column(db.Integer, db.ForeignKey("ranks.id"), nullable=True)       # 確度
-    estimate_no = db.Column(db.String(64), nullable=True)           # 見積番号
-    amount_excl_tax = db.Column(db.Integer, nullable=True)          # 金額(税抜) 円
-    completion_month = db.Column(db.String(7), nullable=True)       # 完成月 YYYY-MM
-    order_date = db.Column(db.Date, nullable=True)                  # 受注日
-    sales_rep = db.Column(db.String(128), nullable=True)           # 営業担当者
-    department = db.Column(db.String(128), nullable=True)          # 部署
-    notes = db.Column(db.Text, nullable=True)                      # 備考メモ
+    id = db.Column(db.Integer, primary_key=True)
+
+    # 集計軸
+    fiscal_period = db.Column(db.Integer, nullable=False, default=59)   # 期（59 など）
+    accounting_month = db.Column(db.String(7), nullable=False)         # 計上月 YYYY-MM
+    department_id = db.Column(db.Integer, db.ForeignKey("departments.id"), nullable=False)
+
+    # 表示順の項目
+    assignee_user_id = db.Column(db.String(64), db.ForeignKey("users.user_id"), nullable=True)  # 担当者
+    kubun_id = db.Column(db.Integer, db.ForeignKey("kubun.id"), nullable=True)                   # 区分
+    category_id = db.Column(db.Integer, db.ForeignKey("categories.id"), nullable=True)           # カテゴリー
+    project_name = db.Column(db.String(255), nullable=False)                                     # 案件名
+    rank_id = db.Column(db.Integer, db.ForeignKey("ranks.id"), nullable=True)                    # 確度
+    sales = db.Column(db.Integer, nullable=True)                                                 # 売上 円
+    cost = db.Column(db.Integer, nullable=True)                                                  # 仕入 円
+    # 売上総利益 = 売上 - 仕入（プロパティで算出、DBには保存しない）
+    estimated_hours = db.Column(db.Float, nullable=True)                                         # 見込み工数
+    actual_hours = db.Column(db.Float, nullable=True)                                            # 対応工数
+    notes = db.Column(db.Text, nullable=True)                                                    # 備考
 
     # システム項目（自動記録）
     created_at = db.Column(db.DateTime, nullable=False, default=_now)
@@ -123,5 +266,36 @@ class Project(db.Model):
     updated_at = db.Column(db.DateTime, nullable=False, default=_now, onupdate=_now)
     updated_by = db.Column(db.String(128), nullable=True)
 
-    status = db.relationship("Status", back_populates="projects")
+    department = db.relationship("Department")
+    assignee = db.relationship("User")
+    kubun = db.relationship("Kubun", back_populates="projects")
+    category = db.relationship("Category", back_populates="projects")
     rank = db.relationship("Rank", back_populates="projects")
+
+    @property
+    def gross_profit(self) -> int:
+        """売上総利益 = 売上 − 仕入（未入力は0扱い）。"""
+        return (self.sales or 0) - (self.cost or 0)
+
+    @property
+    def is_actual(self) -> bool:
+        """実績（受注確定 = 確度○）かどうか。"""
+        return self.rank is not None and self.rank.is_actual
+
+
+class Sga(db.Model):
+    """販管費（月次・部門別に手入力）。四半期/半期/通期は月の合計で自動算出する。"""
+    __tablename__ = "sga"
+
+    id = db.Column(db.Integer, primary_key=True)
+    department_id = db.Column(db.Integer, db.ForeignKey("departments.id"), nullable=False)
+    fiscal_period = db.Column(db.Integer, nullable=False, default=59)
+    month = db.Column(db.String(7), nullable=False)   # YYYY-MM
+    amount = db.Column(db.Integer, nullable=False, default=0)
+
+    __table_args__ = (
+        db.UniqueConstraint("department_id", "fiscal_period", "month",
+                            name="uq_sga_dept_period_month"),
+    )
+
+    department = db.relationship("Department")

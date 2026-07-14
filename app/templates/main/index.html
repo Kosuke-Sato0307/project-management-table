@@ -3,11 +3,12 @@
 {% block content %}
 <div class="page-header">
   <h1>ホーム</h1>
+  <span class="period-tag">{{ period_label }}</span>
 </div>
 
-<p class="text-muted">ようこそ、{{ current_user.name }} さん。</p>
+<p class="text-muted">ようこそ、{{ current_user.name }} さん（{{ current_user.role_label }}）。</p>
 
-{% if current_user.is_admin %}
+{% if current_user.is_sysadmin %}
 <div class="stat-grid">
   <div class="stat">
     <div class="num">{{ project_count }}</div>
@@ -23,12 +24,21 @@
 <div class="card" style="margin-top:16px;">
   <h2>案件管理</h2>
   <p>
-    <a class="btn" href="{{ url_for('projects.list_projects') }}">案件一覧を開く</a>
-    <a class="btn btn-outline" href="{{ url_for('projects.new') }}">＋ 案件を登録</a>
-    <a class="btn btn-outline" href="{{ url_for('imports.upload_page') }}">インポート</a>
+    <a class="btn" href="{{ url_for('projects.list_projects') }}">案件管理表を開く</a>
+    <a class="btn btn-outline" href="{{ url_for('analytics.yojitsu') }}">数字まとめを開く</a>
   </p>
   <p class="text-muted" style="margin-top:12px;">
-    案件の検索・登録・編集・削除、エクスポート（CSV/Excel/PDF）、インポート（Excel/CSV）がご利用いただけます。
+    部門内の案件を計上月ごとに管理し、CSV/Excel/PDF に出力できます。<br>
+    「数字まとめ」では予実・損益・カテゴリー別・確度別の集計（月／四半期／半期／通期）を確認できます。
   </p>
 </div>
+
+{% if current_user.departments %}
+<div class="card">
+  <h2 class="section-title">所属部門</h2>
+  <p>
+    {% for d in current_user.departments %}<span class="badge badge-dept">{{ d.name }}</span>{% endfor %}
+  </p>
+</div>
+{% endif %}
 {% endblock %}
