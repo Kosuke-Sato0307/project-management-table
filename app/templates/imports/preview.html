@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}インポート確認 - 案件管理システム{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1>インポート内容の確認<span class="dept-in-title">（{{ plan_type_labels[plan_type] }}・{{ department.name }}・{{ period }}期）</span></h1>
+  <a class="btn btn-outline btn-sm" href="{{ url_for('imports.upload_page', dept=department.id, type=plan_type, period=period) }}">← やり直す</a>
+</div>
+
+{% if errors %}
+  <div class="card" style="border-color:var(--danger);">
+    <h2 style="font-size:16px; color:var(--danger);">取り込めませんでした（{{ errors|length }}件のエラー）</h2>
+    <p class="text-muted">下記を修正のうえ、もう一度アップロードしてください。<b>1件も取り込まれていません。</b></p>
+    <ul style="margin:0; padding-left:20px; line-height:1.9;">
+      {% for e in errors %}
+      <li class="text-danger">{{ e }}</li>
+      {% endfor %}
+    </ul>
+  </div>
+{% else %}
+  <div class="card">
+    <p>取り込み対象: <b>{{ results|length }}</b> 件（すべて新規追加）</p>
+    <form method="post" action="{{ url_for('imports.commit', dept=department.id) }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="token" value="{{ token }}">
+      <button type="submit" class="btn">この内容で取り込む</button>
+    </form>
+  </div>
+
+  <div class="table-wrap">
+    <table class="table">
+      <thead>
+        <tr><th>行</th><th>計上月</th><th>担当者</th><th>区分</th><th>カテゴリー</th><th>案件名</th><th>確度</th><th class="num-col">売上</th><th class="num-col">仕入</th></tr>
+      </thead>
+      <tbody>
+        {% for r in results %}
+        <tr>
+          <td>{{ r.row_no }}</td>
+          <td>{{ r.data.accounting_month or '' }}</td>
+          <td>{{ r.data.assignee_user_id or '' }}</td>
+          <td>{{ r.data.kubun_id or '' }}</td>
+          <td>{{ r.data.category_id or '' }}</td>
+          <td>{{ r.data.project_name }}</td>
+          <td>{{ r.data.rank_id or '' }}</td>
+          <td class="num-col">{{ r.data.sales | yen }}</td>
+          <td class="num-col">{{ r.data.cost | yen }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <p class="help-text">※ 担当者・区分・カテゴリー・確度はID表示です（保存時に正しく紐づきます）。</p>
+{% endif %}
+{% endblock %}

@@ -64,23 +64,40 @@ def _seed():
     db.session.add_all([sysadmin, manager, taro, hanako])
     db.session.flush()
 
-    # 案件（第2営業部, 59期）
-    # 期初計画（受注確定 ○）: 売上100万, 仕入60万 -> 粗利40万, 計上月 2026-09
+    # 案件（第2営業部, 59期）。計画/実績は plan_type で区別する。
+    # ---- 期初計画（plan_type=initial, 計画値）----
+    # 計画案件A: 2026-09(1Q) 売上100万 仕入60万 -> 粗利40万
     db.session.add(Project(
-        department_id=dept2.id, fiscal_period=59, accounting_month="2026-09",
-        assignee_user_id="hanako", kubun_id=kplan.id, category_id=cat_ri.id,
-        rank_id=ranks["○"].id, project_name="計画案件A", sales=1000000, cost=600000,
-        estimated_hours=10, actual_hours=8))
-    # 新規（○）: 売上50万 仕入20万 -> 粗利30万, 2026-12(=2Q)
+        department_id=dept2.id, fiscal_period=59, plan_type=Project.PLAN_INITIAL,
+        accounting_month="2026-09", assignee_user_id="hanako", kubun_id=kplan.id,
+        category_id=cat_ri.id, rank_id=ranks["○"].id, project_name="計画案件A",
+        sales=1000000, cost=600000, estimated_hours=10, actual_hours=8))
+    # ---- 中期計画（plan_type=midterm, 中期計画値）----
+    # 中期案件M: 2026-09(1Q) 売上120万 仕入70万
     db.session.add(Project(
-        department_id=dept2.id, fiscal_period=59, accounting_month="2026-12",
-        assignee_user_id="hanako", kubun_id=knew.id, category_id=cat_or.id,
-        rank_id=ranks["○"].id, project_name="新規案件B", sales=500000, cost=200000))
-    # 新規（確度B・実績外）: 売上80万 仕入50万, 2027-03(=3Q)
+        department_id=dept2.id, fiscal_period=59, plan_type=Project.PLAN_MIDTERM,
+        accounting_month="2026-09", assignee_user_id="hanako", kubun_id=kplan.id,
+        category_id=cat_ri.id, rank_id=ranks["○"].id, project_name="中期案件M",
+        sales=1200000, cost=700000))
+    # ---- 案件管理（plan_type=management, 実績見込み）----
+    # 実績A'（期初計画から確定）: 2026-09(1Q) 確度○ 売上100万 仕入60万 -> 粗利40万
     db.session.add(Project(
-        department_id=dept2.id, fiscal_period=59, accounting_month="2027-03",
-        assignee_user_id="hanako", kubun_id=knew.id, category_id=cat_ri.id,
-        rank_id=ranks["B"].id, project_name="見込案件C", sales=800000, cost=500000))
+        department_id=dept2.id, fiscal_period=59, plan_type=Project.PLAN_MANAGEMENT,
+        accounting_month="2026-09", assignee_user_id="hanako", kubun_id=kplan.id,
+        category_id=cat_ri.id, rank_id=ranks["○"].id, project_name="計画案件A",
+        sales=1000000, cost=600000, estimated_hours=10, actual_hours=8))
+    # 新規案件B（○）: 売上50万 仕入20万 -> 粗利30万, 2026-12(=2Q)
+    db.session.add(Project(
+        department_id=dept2.id, fiscal_period=59, plan_type=Project.PLAN_MANAGEMENT,
+        accounting_month="2026-12", assignee_user_id="hanako", kubun_id=knew.id,
+        category_id=cat_or.id, rank_id=ranks["○"].id, project_name="新規案件B",
+        sales=500000, cost=200000))
+    # 見込案件C（確度B・実績外）: 売上80万 仕入50万, 2027-03(=3Q)
+    db.session.add(Project(
+        department_id=dept2.id, fiscal_period=59, plan_type=Project.PLAN_MANAGEMENT,
+        accounting_month="2027-03", assignee_user_id="hanako", kubun_id=knew.id,
+        category_id=cat_ri.id, rank_id=ranks["B"].id, project_name="見込案件C",
+        sales=800000, cost=500000))
 
     # 販管費（2026-09 に10万）
     db.session.add(Sga(department_id=dept2.id, fiscal_period=59,

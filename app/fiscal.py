@@ -11,7 +11,10 @@
 """
 from __future__ import annotations
 
-# 現在の対象期。画面の既定値に使う。
+from datetime import date
+
+# アプリが扱う最小の期（フロア値）。59期リニューアルで運用開始したため、
+# これより前の期は選択肢に出さない。既定値の下限にも使う。
 CURRENT_FISCAL_PERIOD = 59
 
 # 期の開始月（9月始まり）
@@ -54,6 +57,32 @@ def period_of_month(month: str) -> int | None:
     # 9〜12月はその年から始まる期、1〜8月は前年から始まる期。
     start_year = y if m >= FISCAL_START_MONTH else y - 1
     return _ANCHOR_PERIOD + (start_year - _ANCHOR_START_YEAR)
+
+
+def default_fiscal_period(today: date | None = None) -> int:
+    """画面の既定として表示する期を返す。
+
+    ルール: max(59, 今日が属する期)。9月1日を境に自動で+1される。
+      - 2026-07（本来58期） -> 59（試験運用のため59期を先行表示、59でフロア）
+      - 2026-09〜2027-08     -> 59
+      - 2027-09〜2028-08     -> 60
+      - 2028-09〜2029-08     -> 61 …
+    """
+    today = today or date.today()
+    ym = f"{today.year:04d}-{today.month:02d}"
+    natural = period_of_month(ym) or CURRENT_FISCAL_PERIOD
+    return max(CURRENT_FISCAL_PERIOD, natural)
+
+
+def selectable_periods(extra: list[int] | None = None) -> list[int]:
+    """期セレクタに出す期の一覧（昇順）。
+
+    59期から「既定期+1」までを基本とし、DB上に存在する期(extra)との和集合を返す。
+    """
+    base = set(range(CURRENT_FISCAL_PERIOD, default_fiscal_period() + 2))
+    if extra:
+        base |= {p for p in extra if p is not None}
+    return sorted(base)
 
 
 def month_index(month: str, period: int = CURRENT_FISCAL_PERIOD) -> int | None:

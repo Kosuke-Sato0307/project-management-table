@@ -6,6 +6,7 @@ from flask_login import current_user
 
 from .extensions import db
 from .models import Department
+from . import fiscal
 
 
 def admin_required(view):
@@ -69,3 +70,15 @@ def resolve_department(require_edit: bool = False):
     if require_edit and not current_user.can_edit_department(department.id):
         abort(403)
     return department, viewable
+
+
+def resolve_period() -> int:
+    """リクエストの ?period=<n> から対象の期を決定して返す。
+
+    選択可能な期（fiscal.selectable_periods）に含まれる値のみ採用し、
+    未指定・不正値のときは既定期（fiscal.default_fiscal_period）を返す。
+    """
+    requested = request.args.get("period", type=int)
+    if requested is not None and requested in fiscal.selectable_periods():
+        return requested
+    return fiscal.default_fiscal_period()

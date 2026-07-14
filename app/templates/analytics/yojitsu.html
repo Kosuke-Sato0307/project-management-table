@@ -4,7 +4,7 @@
 {% include "analytics/_header.html" %}
 {% include "analytics/_gran.html" %}
 
-<p class="text-muted note-small">実績＝確度「○」の合計 ／ 計画＝区分「期初計画」の合計 ／ 差異＝実績−計画 ／ 達成率＝実績÷計画</p>
+<p class="text-muted note-small">実績＝案件管理で確度「○」の合計 ／ 期初計画＝期初計画データの合計 ／ 中期計画＝中期計画データの合計 ／ 差異＝実績−期初計画 ／ 達成率＝実績÷期初計画</p>
 
 {% for t in tables %}
 <div class="card">
@@ -14,11 +14,12 @@
       <thead>
         <tr>
           <th rowspan="2" class="sticky-col">担当者</th>
-          {% for h in t.headers %}<th colspan="4" class="bucket-head">{{ h }}</th>{% endfor %}
+          {% for h in t.headers %}<th colspan="5" class="bucket-head">{{ h }}</th>{% endfor %}
         </tr>
         <tr>
           {% for h in t.headers %}
-            <th class="num-col">実績</th><th class="num-col">計画</th>
+            <th class="num-col">実績</th><th class="num-col">期初計画</th>
+            <th class="num-col">中期計画</th>
             <th class="num-col">差異</th><th class="num-col">達成率</th>
           {% endfor %}
         </tr>
@@ -30,6 +31,7 @@
           {% for c in r.cells %}
             <td class="num-col">{{ c.actual | yen }}</td>
             <td class="num-col">{{ c.plan | yen }}</td>
+            <td class="num-col">{{ c.midterm | yen }}</td>
             <td class="num-col {{ 'neg' if c.var < 0 else '' }}">{{ c.var | yen }}</td>
             <td class="num-col">{{ c.rate | pct }}</td>
           {% endfor %}
@@ -40,6 +42,7 @@
           {% for c in t.total.cells %}
             <td class="num-col">{{ c.actual | yen }}</td>
             <td class="num-col">{{ c.plan | yen }}</td>
+            <td class="num-col">{{ c.midterm | yen }}</td>
             <td class="num-col {{ 'neg' if c.var < 0 else '' }}">{{ c.var | yen }}</td>
             <td class="num-col">{{ c.rate | pct }}</td>
           {% endfor %}

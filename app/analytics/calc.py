@@ -1,16 +1,33 @@
 """数字まとめ（予実/損益/カテゴリー別/確度別）の集計ロジック。
 
 集計の前提（ユーザー確定事項）:
-  - 実績値 = 確度が「○」（受注確定）の案件。
-  - 期初計画値 = 区分が「期初計画」(Kubun.is_plan) の案件。
+  - 期初計画値 = plan_type が「期初計画」(initial) の案件。
+  - 中期計画値 = plan_type が「中期計画」(midterm) の案件。
+  - 実績値 = plan_type が「案件管理」(management) かつ 確度「○」（受注確定）の案件。
   - 売上総利益 = 売上 − 仕入（Project.gross_profit）。
-  - 損益まとめは実績（確度○）ベース。確度別まとめは全案件が対象。
+  - 損益まとめは実績（案件管理×確度○）ベース。確度別まとめは案件管理の全案件が対象。
 
 集計は部門内の案件をメモリに読み込み、月→四半期/半期/通期のバケットで合算する。
 """
 from __future__ import annotations
 
 from .. import fiscal
+
+
+# ---- 案件のデータセット/実績判定（plan_type ベース） ----
+def _is_initial(p) -> bool:
+    """期初計画の案件か。"""
+    return p.plan_type == "initial"
+
+
+def _is_midterm(p) -> bool:
+    """中期計画の案件か。"""
+    return p.plan_type == "midterm"
+
+
+def _is_actual(p) -> bool:
+    """実績（案件管理 かつ 確度○）か。"""
+    return p.plan_type == "management" and p.is_actual
 
 # 指標: (キー, 見出し)
 METRICS = [("sales", "売上"), ("cost", "仕入"), ("gross", "売上総利益")]
@@ -77,27 +94,31 @@ def yojitsu(department, projects, period, gran):
     for mkey, mlabel in METRICS:
         rows = []
         # 合計セル（各バケット）
-        total_cells = [{"plan": 0, "actual": 0} for _ in bks]
+        total_cells = [{"plan": 0, "midterm": 0, "actual": 0} for _ in bks]
         for uid, uname in users:
             cells = []
             for bi, (_, months) in enumerate(bks):
-                plan = actual = 0
+                plan = midterm = actual = 0
                 for p in projects:
                     if p.assignee_user_id != uid:
                         continue
                     if p.accounting_month not in months:
                         continue
                     val = _mval(p, mkey)
-                    if p.kubun is not None and p.kubun.is_plan:
+                    if _is_initial(p):
                         plan += val
-                    if p.is_actual:
+                    if _is_midterm(p):
+                        midterm += val
+                    if _is_actual(p):
                         actual += val
                 total_cells[bi]["plan"] += plan
+                total_cells[bi]["midterm"] += midterm
                 total_cells[bi]["actual"] += actual
-                cells.append(_yojitsu_cell(plan, actual))
+                cells.append(_yojitsu_cell(plan, midterm, actual))
             rows.append({"name": uname, "cells": cells})
         total_row = {"name": "合計",
-                     "cells": [_yojitsu_cell(c["plan"], c["actual"]) for c in total_cells]}
+                     "cells": [_yojitsu_cell(c["plan"], c["midterm"], c["actual"])
+                               for c in total_cells]}
         tables.append({
             "metric": mlabel,
             "headers": [label for label, _ in bks],
@@ -107,9 +128,10 @@ def yojitsu(department, projects, period, gran):
     return tables
 
 
-def _yojitsu_cell(plan, actual):
+def _yojitsu_cell(plan, midterm, actual):
     return {
         "plan": plan,
+        "midterm": midterm,
         "actual": actual,
         "var": actual - plan,
         "rate": _rate(actual, plan),
@@ -135,7 +157,7 @@ def soneki(department, projects, period, gran, sga_by_month):
         for bi, (_, months) in enumerate(bks):
             s = c = g = 0
             for p in projects:
-                if p.assignee_user_id != uid or not p.is_actual:
+                if p.assignee_user_id != uid or not _is_actual(p):
                     continue
                 if p.accounting_month not in months:
                     continue
@@ -189,10 +211,10 @@ def by_category(categories, projects):
             continue
         r = {
             "name": labels[cid],
-            "sales_plan": sum((p.sales or 0) for p in items if p.kubun and p.kubun.is_plan),
-            "sales_actual": sum((p.sales or 0) for p in items if p.is_actual),
-            "gross_plan": sum(p.gross_profit for p in items if p.kubun and p.kubun.is_plan),
-            "gross_actual": sum(p.gross_profit for p in items if p.is_actual),
+            "sales_plan": sum((p.sales or 0) for p in items if _is_initial(p)),
+            "sales_actual": sum((p.sales or 0) for p in items if _is_actual(p)),
+            "gross_plan": sum(p.gross_profit for p in items if _is_initial(p)),
+            "gross_actual": sum(p.gross_profit for p in items if _is_actual(p)),
         }
         for k in totals:
             totals[k] += r[k]
@@ -200,15 +222,20 @@ def by_category(categories, projects):
     return {"rows": rows, "total": {"name": "合計", **totals}}
 
 
-# ---------- (D) 確度別（通期・全案件） ----------
+# ---------- (D) 確度別（通期・案件管理の全案件） ----------
 def by_rank(ranks, projects):
-    """確度ごとに 売上/仕入/売上総利益/粗利率（通期・全案件）。"""
+    """確度ごとに 売上/仕入/売上総利益/粗利率（通期・案件管理の全案件）。
+
+    計画（期初計画/中期計画）の確度は混ぜず、案件管理(management)のみを対象にする。
+    """
     rows = []
     totals = {"sales": 0, "cost": 0, "gross": 0}
     order = [(r.id, r.name) for r in ranks] + [(None, "(確度未設定)")]
     rank_ids = {r.id for r in ranks}
     grouped = {}
     for p in projects:
+        if p.plan_type != "management":
+            continue
         key = p.rank_id if p.rank_id in rank_ids else None
         grouped.setdefault(key, []).append(p)
 

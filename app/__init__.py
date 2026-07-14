@@ -40,12 +40,14 @@ def create_app(config_object=Config) -> Flask:
     from .main.routes import main_bp
     from .projects.routes import projects_bp
     from .analytics.routes import analytics_bp
+    from .imports.routes import imports_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(admin_bp)
     app.register_blueprint(main_bp)
     app.register_blueprint(projects_bp)
     app.register_blueprint(analytics_bp)
+    app.register_blueprint(imports_bp)
 
     # CLI コマンド（初期管理者作成・マスタ初期投入）
     from .cli import register_cli

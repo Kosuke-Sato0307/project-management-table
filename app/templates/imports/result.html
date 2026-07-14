@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block title %}インポート完了 - 案件管理システム{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1>インポート完了<span class="dept-in-title">（{{ plan_type_labels[plan_type] }}・{{ department.name }}・{{ period }}期）</span></h1>
+  <a class="btn btn-sm" href="{{ url_for('projects.list_projects', dept=department.id, type=plan_type, period=period) }}">一覧を見る →</a>
+</div>
+
+<div class="card">
+  <p style="font-size:16px;">取り込みが完了しました。</p>
+  <table class="detail-table" style="max-width:360px;">
+    <tr><th>新規登録</th><td>{{ inserted }} 件</td></tr>
+  </table>
+  <p style="margin-top:16px;">
+    <a class="btn" href="{{ url_for('projects.list_projects', dept=department.id, type=plan_type, period=period) }}">{{ plan_type_labels[plan_type] }}の一覧へ</a>
+    <a class="btn btn-outline" href="{{ url_for('imports.upload_page', dept=department.id, type=plan_type, period=period) }}">続けてインポート</a>
+  </p>
+</div>
+{% endblock %}

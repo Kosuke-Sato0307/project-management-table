@@ -21,4 +21,4 @@ def index():
     return render_template("main/index.html",
                            project_count=project_count,
                            user_count=user_count,
-                           period_label=fiscal.period_label())
+                           period_label=fiscal.period_label(fiscal.default_fiscal_period()))
