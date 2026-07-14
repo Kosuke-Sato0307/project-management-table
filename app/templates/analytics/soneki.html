@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}損益まとめ - 案件管理システム{% endblock %}
+{% block content %}
+{% include "analytics/_header.html" %}
+{% include "analytics/_gran.html" %}
+
+<p class="text-muted note-small">実績（確度「○」）ベース ／ 粗利率＝売上総利益÷売上 ／ 販管費は下記「販管費入力」タブで登録 ／ 差引＝売上総利益−販管費</p>
+
+<div class="card">
+  <div class="table-wrap">
+    <table class="table table-num">
+      <thead>
+        <tr>
+          <th rowspan="2" class="sticky-col">担当者</th>
+          {% for h in data.headers %}<th colspan="4" class="bucket-head">{{ h }}</th>{% endfor %}
+        </tr>
+        <tr>
+          {% for h in data.headers %}
+            <th class="num-col">売上</th><th class="num-col">仕入</th>
+            <th class="num-col">売上総利益</th><th class="num-col">粗利率</th>
+          {% endfor %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in data.rows %}
+        <tr>
+          <td class="sticky-col">{{ r.name }}</td>
+          {% for c in r.cells %}
+            <td class="num-col">{{ c.sales | yen }}</td>
+            <td class="num-col">{{ c.cost | yen }}</td>
+            <td class="num-col">{{ c.gross | yen }}</td>
+            <td class="num-col">{{ c.margin | pct }}</td>
+          {% endfor %}
+        </tr>
+        {% endfor %}
+        <tr class="total-row">
+          <td class="sticky-col">部門合計</td>
+          {% for c in data.total %}
+            <td class="num-col">{{ c.sales | yen }}</td>
+            <td class="num-col">{{ c.cost | yen }}</td>
+            <td class="num-col">{{ c.gross | yen }}</td>
+            <td class="num-col">{{ c.margin | pct }}</td>
+          {% endfor %}
+        </tr>
+        <tr class="sub-row">
+          <td class="sticky-col">販管費</td>
+          {% for amt in data.sga %}
+            <td class="num-col" colspan="4">{{ amt | yen }}</td>
+          {% endfor %}
+        </tr>
+        <tr class="sub-row">
+          <td class="sticky-col">差引（粗利−販管費）</td>
+          {% for amt in data.balance %}
+            <td class="num-col {{ 'neg' if amt < 0 else '' }}" colspan="4">{{ amt | yen }}</td>
+          {% endfor %}
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

@@ -26,8 +26,30 @@
     });
   }
 
+  // 売上総利益（売上 − 仕入）の自動表示。
+  function toNumber(v) {
+    var d = (v || "").replace(/[^0-9-]/g, "");
+    if (d === "" || d === "-") return 0;
+    return parseInt(d, 10) || 0;
+  }
+
+  function attachGross() {
+    var sales = document.getElementById("f-sales");
+    var cost = document.getElementById("f-cost");
+    var gross = document.getElementById("f-gross");
+    if (!sales || !cost || !gross) return;
+    function recalc() {
+      var g = toNumber(sales.value) - toNumber(cost.value);
+      gross.value = g.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+    }
+    sales.addEventListener("input", recalc);
+    cost.addEventListener("input", recalc);
+    recalc();
+  }
+
   document.addEventListener("DOMContentLoaded", function () {
     var inputs = document.querySelectorAll("input[data-comma]");
     for (var i = 0; i < inputs.length; i++) attach(inputs[i]);
+    attachGross();
   });
 })();

@@ -226,3 +226,69 @@ td.num-col { font-variant-numeric: tabular-nums; }
 /* 一覧ツールバー / エクスポート */
 .list-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 12px 0; flex-wrap: wrap; }
 .export-buttons { display: flex; align-items: center; gap: 6px; }
+
+/* ===== 部門バー / 期タグ ===== */
+.dept-bar { display: flex; align-items: center; gap: 10px; padding: 14px 18px; flex-wrap: wrap; }
+.period-tag {
+  display: inline-block; margin-left: 8px; padding: 4px 12px; border-radius: 999px;
+  background: #eef5ff; color: var(--primary-dark); font-size: 13px; font-weight: 600;
+  border: 1px solid var(--border-strong);
+}
+.dept-in-title { font-size: 16px; color: var(--muted); font-weight: 500; }
+
+/* 権限バッジ（所属部門など） */
+.badge-dept { background: rgba(37,99,235,.10); color: var(--primary-dark); border: 1px solid var(--border-strong); margin-right: 4px; }
+
+/* チェックボックスのグリッド（所属部門選択） */
+.checkbox-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
+.checkbox-item { display: flex; align-items: center; gap: 6px; font-weight: 500; font-size: 14px; }
+.checkbox-item input { width: auto; }
+
+/* ===== 案件管理表（月ブロック） ===== */
+.month-block { margin-bottom: 22px; }
+.month-head {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
+  padding: 8px 14px; background: var(--header-grad); color: #fff;
+  border-radius: 10px 10px 0 0; box-shadow: var(--shadow-sm); flex-wrap: wrap;
+}
+.month-title { font-size: 16px; font-weight: 700; }
+.month-subtotal { font-size: 13px; color: rgba(255,255,255,.92); }
+.table-cases td, .table-cases th { font-size: 13px; padding: 8px 10px; white-space: nowrap; }
+.table-cases .notes-cell { white-space: normal; min-width: 160px; max-width: 280px; }
+
+/* フォーム内の2カラム分ぶち抜き / 読み取り専用欄 */
+.form-span2 { grid-column: 1 / -1; }
+.readonly-field { background: #eef2f8; color: var(--text); font-weight: 600; }
+.form-actions { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
+.delete-form { margin-top: 14px; padding-top: 14px; border-top: 1px dashed var(--border); }
+
+/* ===== 集計単位の切替（gran） ===== */
+.gran-tabs { display: flex; align-items: center; gap: 8px; margin: 4px 0 16px; flex-wrap: wrap; }
+.gran-label { font-size: 13px; color: var(--muted); }
+.gran-pill {
+  padding: 5px 14px; border-radius: 999px; font-size: 13px; font-weight: 600;
+  background: #fff; color: var(--primary); border: 1px solid var(--border-strong);
+}
+.gran-pill:hover { background: #eff5ff; text-decoration: none; }
+.gran-pill.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+
+/* ===== 数字まとめのテーブル ===== */
+.note-small { font-size: 12.5px; margin: 0 0 12px; }
+.section-title { font-size: 16px; margin: 0 0 12px; color: #1b2f4a; }
+.table-num { font-size: 13px; }
+.table-num th, .table-num td { padding: 7px 10px; white-space: nowrap; }
+.table-num .bucket-head { text-align: center; background: #e4eefb; border-left: 2px solid var(--border-strong); }
+.table-num .sticky-col {
+  position: sticky; left: 0; z-index: 2; background: #f0f6ff;
+  box-shadow: 1px 0 0 var(--border-strong); font-weight: 600;
+}
+.table-num tbody tr:hover .sticky-col { background: #e8f1ff; }
+.table-num td.num-col { font-variant-numeric: tabular-nums; }
+.table-num .total-row td { background: #eaf2ff; font-weight: 700; border-top: 2px solid var(--border-strong); }
+.table-num .total-row .sticky-col { background: #dfebfb; }
+.table-num .sub-row td { background: #fbfdff; font-weight: 600; }
+.table-num .neg { color: var(--danger); }
+
+/* 販管費の自動集計グリッド */
+.agg-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 18px; }
+.agg-title { font-size: 14px; margin: 0 0 6px; color: #274465; }

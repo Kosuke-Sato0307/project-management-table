@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}確度別まとめ - 案件管理システム{% endblock %}
+{% block content %}
+{% include "analytics/_header.html" %}
+
+<p class="text-muted note-small">通期・部門内の確度別集計（全案件） ／ 粗利率＝売上総利益÷売上</p>
+
+<div class="card">
+  <div class="table-wrap">
+    <table class="table table-num">
+      <thead>
+        <tr>
+          <th class="sticky-col">確度</th>
+          <th class="num-col">売上</th>
+          <th class="num-col">仕入</th>
+          <th class="num-col">売上総利益</th>
+          <th class="num-col">粗利率</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in data.rows %}
+        <tr>
+          <td class="sticky-col">{{ r.name }}</td>
+          <td class="num-col">{{ r.sales | yen }}</td>
+          <td class="num-col">{{ r.cost | yen }}</td>
+          <td class="num-col">{{ r.gross | yen }}</td>
+          <td class="num-col">{{ r.margin | pct }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="5" class="text-muted" style="text-align:center; padding:16px;">データがありません。</td></tr>
+        {% endfor %}
+        {% if data.rows %}
+        <tr class="total-row">
+          <td class="sticky-col">{{ data.total.name }}</td>
+          <td class="num-col">{{ data.total.sales | yen }}</td>
+          <td class="num-col">{{ data.total.cost | yen }}</td>
+          <td class="num-col">{{ data.total.gross | yen }}</td>
+          <td class="num-col">{{ data.total.margin | pct }}</td>
+        </tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

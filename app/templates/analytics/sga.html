@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block title %}販管費入力 - 案件管理システム{% endblock %}
+{% block content %}
+{% include "analytics/_header.html" %}
+
+<p class="text-muted note-small">月ごとの販管費を手入力します。四半期・半期・通期は自動合計です。{% if not can_edit %}（この部門の編集権がないため閲覧のみ）{% endif %}</p>
+
+<div class="card">
+  <form method="post" action="{{ url_for('analytics.sga', dept=department.id) }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="table-wrap">
+      <table class="table table-num">
+        <thead>
+          <tr><th>月</th><th class="num-col">販管費（円）</th></tr>
+        </thead>
+        <tbody>
+          {% for m, label, amount in month_rows %}
+          <tr>
+            <td>{{ label }}</td>
+            <td class="num-col">
+              <input type="text" name="m_{{ m }}" data-comma inputmode="numeric"
+                     value="{{ amount if amount else '' }}" style="max-width:180px; text-align:right;"
+                     {% if not can_edit %}disabled{% endif %}>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% if can_edit %}
+    <div class="form-actions"><button type="submit" class="btn">保存する</button></div>
+    {% endif %}
+  </form>
+</div>
+
+<div class="card">
+  <h2 class="section-title">自動集計</h2>
+  <div class="agg-grid">
+    <div>
+      <h3 class="agg-title">四半期</h3>
+      <table class="table table-num">
+        {% for label, amt in quarters %}
+        <tr><td>{{ label }}</td><td class="num-col">{{ amt | yen }}</td></tr>
+        {% endfor %}
+      </table>
+    </div>
+    <div>
+      <h3 class="agg-title">半期</h3>
+      <table class="table table-num">
+        {% for label, amt in halves %}
+        <tr><td>{{ label }}</td><td class="num-col">{{ amt | yen }}</td></tr>
+        {% endfor %}
+      </table>
+    </div>
+    <div>
+      <h3 class="agg-title">通期</h3>
+      <table class="table table-num">
+        <tr><td>通期</td><td class="num-col">{{ full | yen }}</td></tr>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}
