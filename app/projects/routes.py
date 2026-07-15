@@ -15,7 +15,8 @@ from flask import (Blueprint, render_template, request, redirect, url_for,
 from flask_login import login_required, current_user
 
 from ..extensions import db
-from ..models import Project, Rank, Kubun, Category, Department, User
+from ..models import (Project, Rank, Kubun, Category, ProductCategory,
+                      Department, User)
 from ..decorators import password_change_guard, resolve_department, resolve_period
 from .. import exporters
 from .. import fiscal
@@ -99,25 +100,44 @@ def _parse_fk(value):
 
 
 def _masters(department):
-    """選択肢用に有効なマスタを取得（カテゴリーと担当者は部門でしぼる）。"""
+    """選択肢用に有効なマスタを取得（カテゴリー・商品カテゴリ・担当者は部門でしぼる）。"""
     ranks = Rank.query.filter_by(is_active=True).order_by(Rank.sort_order).all()
     kubun = Kubun.query.filter_by(is_active=True).order_by(Kubun.sort_order).all()
     categories = Category.query.filter_by(
         department_id=department.id, is_active=True
     ).order_by(Category.sort_order).all()
+    product_categories = ProductCategory.query.filter_by(
+        department_id=department.id, is_active=True
+    ).order_by(ProductCategory.sort_order).all()
     # 担当者はその部門に所属するユーザー
     members = sorted(department.members, key=lambda u: u.user_id)
-    return ranks, kubun, categories, members
+    return ranks, kubun, categories, product_categories, members
+
+
+def _suggestions(department):
+    """取引先・エンドユーザの過去入力候補（その部門の distinct 非NULL値）。"""
+    clients = [r[0] for r in db.session.query(Project.client_name).filter(
+        Project.department_id == department.id,
+        Project.client_name.isnot(None), Project.client_name != ""
+    ).distinct().order_by(Project.client_name).all()]
+    end_users = [r[0] for r in db.session.query(Project.end_user_name).filter(
+        Project.department_id == department.id,
+        Project.end_user_name.isnot(None), Project.end_user_name != ""
+    ).distinct().order_by(Project.end_user_name).all()]
+    return clients, end_users
 
 
 def _collect_project_form(department, errors):
     """フォームから案件データを取り出して検証する（部門は department で固定）。"""
     data = {
-        "accounting_month": _parse_month(request.form.get("accounting_month"), "計上月", errors),
+        "accounting_month": _parse_month(request.form.get("accounting_month"), "完成月", errors),
         "assignee_user_id": _clean(request.form.get("assignee_user_id")),
         "kubun_id": _parse_fk(request.form.get("kubun_id")),
         "category_id": _parse_fk(request.form.get("category_id")),
         "project_name": _clean(request.form.get("project_name")),
+        "client_name": _clean(request.form.get("client_name")),
+        "end_user_name": _clean(request.form.get("end_user_name")),
+        "product_category_id": _parse_fk(request.form.get("product_category_id")),
         "rank_id": _parse_fk(request.form.get("rank_id")),
         "sales": _parse_int(request.form.get("sales"), "売上", errors),
         "cost": _parse_int(request.form.get("cost"), "仕入", errors),
@@ -169,6 +189,7 @@ def list_projects():
         periods=fiscal.selectable_periods(_existing_periods(department)),
         plan_type=plan_type, plan_type_labels=Project.PLAN_TYPE_LABELS,
         can_edit=current_user.can_edit_department(department.id) or current_user.role == 'user',
+        can_manage=current_user.can_edit_department(department.id),
     )
 
 
@@ -199,7 +220,8 @@ def new():
         abort(403)
     period = resolve_period()
     plan_type = _resolve_plan_type()
-    ranks, kubun, categories, members = _masters(department)
+    ranks, kubun, categories, product_categories, members = _masters(department)
+    clients, end_users = _suggestions(department)
 
     if request.method == "POST":
         errors = []
@@ -213,10 +235,13 @@ def new():
                 flash(e, "danger")
             return render_template("projects/form.html", mode="new", department=department,
                                    ranks=ranks, kubun=kubun, categories=categories,
+                                   product_categories=product_categories,
+                                   client_suggestions=clients, end_user_suggestions=end_users,
                                    members=members, form=request.form, project=None,
                                    plan_type=plan_type, period=period,
                                    plan_type_labels=Project.PLAN_TYPE_LABELS)
 
+        _apply_assignee_name(data)
         project = Project(department_id=department.id,
                           fiscal_period=period, plan_type=plan_type,
                           created_by=current_user.user_id,
@@ -233,6 +258,8 @@ def new():
         default_form = {"assignee_user_id": current_user.user_id}
     return render_template("projects/form.html", mode="new", department=department,
                            ranks=ranks, kubun=kubun, categories=categories,
+                           product_categories=product_categories,
+                           client_suggestions=clients, end_user_suggestions=end_users,
                            members=members, form=default_form, project=None,
                            plan_type=plan_type, period=period,
                            plan_type_labels=Project.PLAN_TYPE_LABELS)
@@ -249,7 +276,8 @@ def edit(project_id):
     if not current_user.can_view_project(project):
         abort(403)
     department = project.department
-    ranks, kubun, categories, members = _masters(department)
+    ranks, kubun, categories, product_categories, members = _masters(department)
+    clients, end_users = _suggestions(department)
 
     if request.method == "POST":
         if not current_user.can_edit_project(project):
@@ -265,10 +293,13 @@ def edit(project_id):
                 flash(e, "danger")
             return render_template("projects/form.html", mode="edit", department=department,
                                    ranks=ranks, kubun=kubun, categories=categories,
+                                   product_categories=product_categories,
+                                   client_suggestions=clients, end_user_suggestions=end_users,
                                    members=members, form=request.form, project=project,
                                    plan_type=project.plan_type, period=project.fiscal_period,
                                    plan_type_labels=Project.PLAN_TYPE_LABELS)
 
+        _apply_assignee_name(data)
         for key, value in data.items():
             setattr(project, key, value)
         project.updated_by = current_user.user_id
@@ -281,6 +312,8 @@ def edit(project_id):
         abort(403)
     return render_template("projects/form.html", mode="edit", department=department,
                            ranks=ranks, kubun=kubun, categories=categories,
+                           product_categories=product_categories,
+                           client_suggestions=clients, end_user_suggestions=end_users,
                            members=members, form=None, project=project,
                            plan_type=project.plan_type, period=project.fiscal_period,
                            plan_type_labels=Project.PLAN_TYPE_LABELS)
@@ -294,6 +327,13 @@ def _validate_assignee(data, department, errors):
     user = db.session.get(User, uid)
     if user is None or department.id not in user.department_ids:
         errors.append("担当者はその部門に所属するユーザーから選択してください。")
+
+
+def _apply_assignee_name(data):
+    """担当者名スナップショットを設定する（削除後も氏名を残すため）。"""
+    uid = data.get("assignee_user_id")
+    user = db.session.get(User, uid) if uid else None
+    data["assignee_name"] = user.name if user else None
 
 
 # ---------- 削除 ----------
@@ -319,8 +359,9 @@ def delete(project_id):
 
 # ---------- 期初計画/中期計画 → 案件管理へコピー ----------
 # コピー対象の列（監査列・plan_type・fiscal_period・部門は再設定するため除外）
-_COPY_FIELDS = ("accounting_month", "assignee_user_id", "kubun_id", "category_id",
-                "project_name", "rank_id", "sales", "cost",
+_COPY_FIELDS = ("accounting_month", "assignee_user_id", "assignee_name", "kubun_id",
+                "category_id", "project_name", "client_name", "end_user_name",
+                "product_category_id", "rank_id", "sales", "cost",
                 "estimated_hours", "actual_hours", "notes")
 
 

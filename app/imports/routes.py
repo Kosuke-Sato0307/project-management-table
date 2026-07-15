@@ -16,7 +16,7 @@ from flask import (Blueprint, render_template, request, redirect, url_for,
 from flask_login import login_required, current_user
 
 from ..extensions import db
-from ..models import Project, Rank, Kubun, Category
+from ..models import Project, Rank, Kubun, Category, ProductCategory
 from ..decorators import password_change_guard, resolve_department, resolve_period
 from .. import importers
 
@@ -50,17 +50,21 @@ def _resolve_plan_type():
 def _masters_maps(department):
     """検証用のマップ群を作る。
 
-    戻り値: (member_map, kubun_map, category_map, rank_map)
-      member_map:   {氏名: user_id}     （その部門のメンバー）
-      kubun_map:    {区分名: id}
-      category_map: {コード or 表示名: id}（その部門）
-      rank_map:     {確度名: id}
+    戻り値: (member_map, kubun_map, category_map, rank_map, product_category_map)
+      member_map:           {氏名: user_id}     （その部門のメンバー）
+      kubun_map:            {区分名: id}
+      category_map:         {コード or 表示名: id}（その部門）
+      rank_map:             {確度名: id}
+      product_category_map: {商品カテゴリ名: id} （その部門）
     """
     ranks = Rank.query.filter_by(is_active=True).order_by(Rank.sort_order).all()
     kubun = Kubun.query.filter_by(is_active=True).order_by(Kubun.sort_order).all()
     categories = Category.query.filter_by(
         department_id=department.id, is_active=True
     ).order_by(Category.sort_order).all()
+    product_categories = ProductCategory.query.filter_by(
+        department_id=department.id, is_active=True
+    ).order_by(ProductCategory.sort_order).all()
     members = sorted(department.members, key=lambda u: u.user_id)
 
     member_map = {u.name: u.user_id for u in members}
@@ -70,7 +74,8 @@ def _masters_maps(department):
         category_map[c.code] = c.id
         category_map[c.display_name] = c.id
     rank_map = {r.name: r.id for r in ranks}
-    return member_map, kubun_map, category_map, rank_map
+    product_category_map = {pc.name: pc.id for pc in product_categories}
+    return (member_map, kubun_map, category_map, rank_map, product_category_map)
 
 
 def _template_choices(department):
@@ -82,11 +87,15 @@ def _template_choices(department):
     categories = Category.query.filter_by(
         department_id=department.id, is_active=True
     ).order_by(Category.sort_order).all()
+    product_categories = ProductCategory.query.filter_by(
+        department_id=department.id, is_active=True
+    ).order_by(ProductCategory.sort_order).all()
     members = sorted(department.members, key=lambda u: u.user_id)
     return {
         "assignee": [u.name for u in members],
         "kubun": [k.name for k in kubun],
         "category": [c.code for c in categories],
+        "product_category": [pc.name for pc in product_categories],
         "rank": [r.name for r in ranks],
     }
 
@@ -252,12 +261,18 @@ def commit():
         return render_template("imports/preview.html", errors=errors,
                                results=None, **ctx)
 
+    # 担当者名スナップショット用の {user_id: 氏名} マップ（削除後も氏名を残すため）
+    name_by_id = {u.name: u.user_id for u in department.members}
+    id_to_name = {uid: nm for nm, uid in name_by_id.items()}
+
     inserted = 0
     try:
         for r in results:
+            assignee_name = id_to_name.get(r.data.get("assignee_user_id"))
             project = Project(department_id=department.id, fiscal_period=period,
                               plan_type=plan_type, created_by=current_user.user_id,
-                              updated_by=current_user.user_id, **r.data)
+                              updated_by=current_user.user_id,
+                              assignee_name=assignee_name, **r.data)
             db.session.add(project)
             inserted += 1
         db.session.commit()

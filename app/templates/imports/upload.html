@@ -14,7 +14,7 @@
     <a class="btn btn-outline" href="{{ url_for('imports.template_csv', dept=department.id, type=plan_type, period=period) }}">CSVテンプレート</a>
   </p>
   {% if has_dropdown %}
-  <p class="help-text">Excelテンプレートでは 担当者・区分・カテゴリー・確度 をプルダウンから選べます。金額はカンマ区切りで表示されます。</p>
+  <p class="help-text">Excelテンプレートでは 担当者・区分・カテゴリー・商品カテゴリ・確度 をプルダウンから選べます。金額はカンマ区切りで表示されます。取引先・エンドユーザは自由入力です。</p>
   {% endif %}
 </div>
 
@@ -33,8 +33,8 @@
   <h2 style="font-size:16px;">入力のきまり</h2>
   <ul class="text-muted" style="margin:0; padding-left:20px; line-height:1.9;">
     <li>1行目は見出し（テンプレートのまま変更しないでください）。2行目以降にデータを入力します。</li>
-    <li><b>計上月</b>（例: <code>2026-09</code>）・<b>案件名</b>は必須です。</li>
-    <li>金額は数字のみ（カンマ可）。担当者・区分・カテゴリー・確度は<b>この部門に登録済みの名称/コード</b>を入力してください。</li>
+    <li><b>完成月</b>（例: <code>2026-09</code>）・<b>案件名</b>は必須です。</li>
+    <li>金額は数字のみ（カンマ可）。担当者・区分・カテゴリー・商品カテゴリ・確度は<b>この部門に登録済みの名称/コード</b>を入力してください。取引先・エンドユーザは自由入力です。</li>
     <li>取り込むと、この{{ plan_type_labels[plan_type] }}（{{ department.name }}・{{ period }}期）に<b>新規追加</b>されます。</li>
     <li>不正な行が1つでもあると、<b>すべて取り込まれません</b>（エラー内容を表示します）。修正して再度お試しください。</li>
     <li>取込項目: {{ headers | join('、') }}</li>

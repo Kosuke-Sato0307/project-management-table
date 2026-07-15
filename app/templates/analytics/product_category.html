@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}商品カテゴリ別まとめ - 案件管理システム{% endblock %}
+{% block content %}
+{% include "analytics/_header.html" %}
+
+<p class="text-muted note-small">通期・部門内の商品カテゴリ別集計 ／ 計画＝区分「期初計画」 ／ 実績＝確度「○」</p>
+
+<div class="card">
+  <div class="table-wrap">
+    <table class="table table-num">
+      <thead>
+        <tr>
+          <th class="sticky-col">商品カテゴリ</th>
+          <th class="num-col">売上計画</th>
+          <th class="num-col">売上実績</th>
+          <th class="num-col">売上総利益計画</th>
+          <th class="num-col">売上総利益実績</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in data.rows %}
+        <tr>
+          <td class="sticky-col">{{ r.name }}</td>
+          <td class="num-col">{{ r.sales_plan | yen }}</td>
+          <td class="num-col">{{ r.sales_actual | yen }}</td>
+          <td class="num-col">{{ r.gross_plan | yen }}</td>
+          <td class="num-col">{{ r.gross_actual | yen }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="5" class="text-muted" style="text-align:center; padding:16px;">データがありません。</td></tr>
+        {% endfor %}
+        {% if data.rows %}
+        <tr class="total-row">
+          <td class="sticky-col">{{ data.total.name }}</td>
+          <td class="num-col">{{ data.total.sales_plan | yen }}</td>
+          <td class="num-col">{{ data.total.sales_actual | yen }}</td>
+          <td class="num-col">{{ data.total.gross_plan | yen }}</td>
+          <td class="num-col">{{ data.total.gross_actual | yen }}</td>
+        </tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

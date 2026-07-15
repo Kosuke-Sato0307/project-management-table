@@ -14,11 +14,14 @@ JST = timezone(timedelta(hours=9))
 
 # (見出し, 属性, 種別)
 COLUMNS = [
-    ("計上月", "accounting_month", "month"),
+    ("完成月", "accounting_month", "month"),
     ("担当者", "assignee", "assignee"),
     ("区分", "kubun", "kubun"),
     ("カテゴリー", "category", "category"),
     ("案件名", "project_name", "text"),
+    ("取引先", "client_name", "text"),
+    ("エンドユーザ", "end_user_name", "text"),
+    ("商品カテゴリ", "product_category", "product_category"),
     ("確度", "rank", "rank"),
     ("売上", "sales", "int"),
     ("仕入", "cost", "int"),
@@ -32,18 +35,20 @@ COLUMNS = [
     ("編集者", "updated_by", "text"),
 ]
 
-PDF_COLUMNS = ["計上月", "担当者", "区分", "カテゴリー", "案件名", "確度",
-               "売上", "仕入", "売上総利益"]
+PDF_COLUMNS = ["完成月", "担当者", "カテゴリー", "案件名", "取引先", "商品カテゴリ",
+               "確度", "売上", "仕入", "売上総利益"]
 
 
 # ---------- 値の取り出し・整形 ----------
 def _raw(p, attr, kind):
     if kind == "assignee":
-        return p.assignee.name if p.assignee else None
+        return p.assignee_display or None
     if kind == "kubun":
         return p.kubun.name if p.kubun else None
     if kind == "category":
         return p.category.code if p.category else None
+    if kind == "product_category":
+        return p.product_category.name if p.product_category else None
     if kind == "rank":
         return p.rank.name if p.rank else None
     return getattr(p, attr)
@@ -202,8 +207,9 @@ def to_pdf(projects, title="案件一覧") -> bytes:
         data.append(row)
 
     total_w = 277 * mm
-    weights = {"計上月": 0.9, "担当者": 1.1, "区分": 0.9, "カテゴリー": 0.8,
-               "案件名": 2.4, "確度": 0.6, "売上": 1.2, "仕入": 1.2, "売上総利益": 1.2}
+    weights = {"完成月": 0.8, "担当者": 1.0, "区分": 0.8, "カテゴリー": 0.8,
+               "案件名": 2.0, "取引先": 1.3, "エンドユーザ": 1.3, "商品カテゴリ": 1.1,
+               "確度": 0.5, "売上": 1.1, "仕入": 1.1, "売上総利益": 1.1}
     wsum = sum(weights[h] for h in PDF_COLUMNS)
     col_widths = [total_w * weights[h] / wsum for h in PDF_COLUMNS]
     # 金額系の列は右寄せ

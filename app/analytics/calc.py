@@ -222,6 +222,38 @@ def by_category(categories, projects):
     return {"rows": rows, "total": {"name": "合計", **totals}}
 
 
+# ---------- (C-2) 商品カテゴリ別（通期） ----------
+def by_product_category(product_categories, projects):
+    """商品カテゴリごとに 売上計画/売上実績/売上総利益計画/売上総利益実績（通期）。"""
+    rows = []
+    totals = {"sales_plan": 0, "sales_actual": 0, "gross_plan": 0, "gross_actual": 0}
+    pc_map = {pc.id: pc.name for pc in product_categories}
+    order = list(pc_map.keys()) + [None]
+    labels = dict(pc_map)
+    labels[None] = "(商品カテゴリ未設定)"
+
+    grouped = {pid: [] for pid in order}
+    for p in projects:
+        key = p.product_category_id if p.product_category_id in pc_map else None
+        grouped.setdefault(key, []).append(p)
+
+    for pid in order:
+        items = grouped.get(pid, [])
+        if not items and pid is None:
+            continue
+        r = {
+            "name": labels[pid],
+            "sales_plan": sum((p.sales or 0) for p in items if _is_initial(p)),
+            "sales_actual": sum((p.sales or 0) for p in items if _is_actual(p)),
+            "gross_plan": sum(p.gross_profit for p in items if _is_initial(p)),
+            "gross_actual": sum(p.gross_profit for p in items if _is_actual(p)),
+        }
+        for k in totals:
+            totals[k] += r[k]
+        rows.append(r)
+    return {"rows": rows, "total": {"name": "合計", **totals}}
+
+
 # ---------- (D) 確度別（通期・案件管理の全案件） ----------
 def by_rank(ranks, projects):
     """確度ごとに 売上/仕入/売上総利益/粗利率（通期・案件管理の全案件）。

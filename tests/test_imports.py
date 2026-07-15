@@ -6,8 +6,18 @@ from openpyxl import load_workbook
 
 from app import importers
 from app.extensions import db
-from app.models import Project, Department, Kubun, Rank, Category
+from app.models import Project, Department, Kubun, Rank, Category, ProductCategory
 from tests.conftest import login
+
+
+# TEMPLATE_HEADERS 順:
+#   完成月/担当者/区分/カテゴリー/案件名/取引先/エンドユーザ/商品カテゴリ/確度/売上/仕入/見込み工数/対応工数/備考
+def _row(**kw):
+    """新レイアウトの1行を作る（未指定は空）。"""
+    order = ["完成月", "担当者", "区分", "カテゴリー", "案件名", "取引先",
+             "エンドユーザ", "商品カテゴリ", "確度", "売上", "仕入",
+             "見込み工数", "対応工数", "備考"]
+    return [kw.get(h, "") for h in order]
 
 
 # ---------- importers（HTTP非依存ロジック） ----------
@@ -21,55 +31,75 @@ def _maps(app):
             cats[c.code] = c.id
             cats[c.display_name] = c.id
         ranks = {r.name: r.id for r in Rank.query.all()}
-        return members, kubun, cats, ranks
+        pcs = {pc.name: pc.id for pc in
+               ProductCategory.query.filter_by(department_id=dept.id).all()}
+        return members, kubun, cats, ranks, pcs
 
 
 def test_validate_ok(app):
-    members, kubun, cats, ranks = _maps(app)
+    members, kubun, cats, ranks, pcs = _maps(app)
     headers = importers.TEMPLATE_HEADERS
-    rows = [(2, ["2026-09", "鈴木花子", "新規", "Ri", "取込案件", "○",
-                 "1,000,000", "600000", "10", "8", "メモ"])]
-    results, errors = importers.validate(headers, rows, members, kubun, cats, ranks)
+    rows = [(2, _row(完成月="2026-09", 担当者="鈴木花子", 区分="新規",
+                     カテゴリー="Ri", 案件名="取込案件", 取引先="取引先A",
+                     エンドユーザ="エンドA", 商品カテゴリ="GW-保守", 確度="○",
+                     売上="1,000,000", 仕入="600000", 見込み工数="10",
+                     対応工数="8", 備考="メモ"))]
+    results, errors = importers.validate(headers, rows, members, kubun, cats, ranks, pcs)
     assert errors == []
     assert len(results) == 1
     d = results[0].data
     assert d["accounting_month"] == "2026-09"
     assert d["assignee_user_id"] == "hanako"
     assert d["project_name"] == "取込案件"
+    assert d["client_name"] == "取引先A"
+    assert d["end_user_name"] == "エンドA"
+    assert d["product_category_id"] == pcs["GW-保守"]
     assert d["sales"] == 1000000 and d["cost"] == 600000
     assert d["estimated_hours"] == 10.0
 
 
 def test_validate_missing_required(app):
-    members, kubun, cats, ranks = _maps(app)
+    members, kubun, cats, ranks, pcs = _maps(app)
     headers = importers.TEMPLATE_HEADERS
-    # 計上月なし・案件名なし
-    rows = [(2, ["", "鈴木花子", "新規", "Ri", "", "○", "100", "50", "", "", ""])]
-    results, errors = importers.validate(headers, rows, members, kubun, cats, ranks)
+    # 完成月なし・案件名なし
+    rows = [(2, _row(担当者="鈴木花子", 区分="新規", カテゴリー="Ri", 確度="○",
+                     売上="100", 仕入="50"))]
+    results, errors = importers.validate(headers, rows, members, kubun, cats, ranks, pcs)
     assert results == []
-    assert any("計上月" in e for e in errors)
+    assert any("完成月" in e for e in errors)
     assert any("案件名" in e for e in errors)
 
 
 def test_validate_unknown_master(app):
-    members, kubun, cats, ranks = _maps(app)
+    members, kubun, cats, ranks, pcs = _maps(app)
     headers = importers.TEMPLATE_HEADERS
-    rows = [(2, ["2026-09", "存在しない人", "新規", "Ri", "案件", "○",
-                 "100", "50", "", "", ""])]
-    results, errors = importers.validate(headers, rows, members, kubun, cats, ranks)
+    rows = [(2, _row(完成月="2026-09", 担当者="存在しない人", 区分="新規",
+                     カテゴリー="Ri", 案件名="案件", 確度="○", 売上="100", 仕入="50"))]
+    results, errors = importers.validate(headers, rows, members, kubun, cats, ranks, pcs)
     assert results == []
     assert any("担当者" in e for e in errors)
 
 
+def test_validate_unknown_product_category(app):
+    members, kubun, cats, ranks, pcs = _maps(app)
+    headers = importers.TEMPLATE_HEADERS
+    rows = [(2, _row(完成月="2026-09", 案件名="案件", 商品カテゴリ="存在しない商品"))]
+    results, errors = importers.validate(headers, rows, members, kubun, cats, ranks, pcs)
+    assert results == []
+    assert any("商品カテゴリ" in e for e in errors)
+
+
 def test_template_xlsx_has_dropdown_and_format():
     choices = {"assignee": ["鈴木花子"], "kubun": ["期初計画", "新規"],
-               "category": ["Ri", "Or"], "rank": ["○", "A", "B"]}
+               "category": ["Ri", "Or"], "product_category": ["GW-保守", "音声-保守"],
+               "rank": ["○", "A", "B"]}
     data = importers.template_xlsx(choices)
     wb = load_workbook(io.BytesIO(data))
     ws = wb.active
     assert [c.value for c in ws[1]] == importers.TEMPLATE_HEADERS
-    # ドロップダウン（データ検証）が設定されている
-    assert len(ws.data_validations.dataValidation) >= 4
+    assert ws.cell(row=1, column=1).value == "完成月"
+    # ドロップダウン（データ検証）が設定されている（担当者/区分/カテゴリー/商品カテゴリ/確度）
+    assert len(ws.data_validations.dataValidation) >= 5
 
 
 def test_template_xlsx_no_dropdown_when_empty():

@@ -49,7 +49,7 @@ def test_accounting_month_required(client, app):
     resp = client.post(f"/projects/new?dept={dept_id}",
                        data={"project_name": "月なし", "accounting_month": ""},
                        follow_redirects=True)
-    assert "計上月は必須".encode() in resp.data
+    assert "完成月は必須".encode() in resp.data
 
 
 def test_sales_accepts_comma_and_fullwidth(client, app):
@@ -99,23 +99,32 @@ def test_general_user_cannot_view_other_department(client, app):
     assert resp.status_code == 403
 
 
-def test_manager_can_view_all_but_edit_only_own_dept(client, app):
+def test_manager_can_view_and_edit_managed_dept(client, app):
+    # bucho: 所属=第2営業部, 閲覧・編集可=第1営業部
     with app.app_context():
         dept1_id = Department.query.filter_by(name="第1営業部").first().id
         p = Project.query.filter_by(project_name="計画案件A").first()
         pid = p.id
     login(client, "bucho", "buchopass1")
-    # 他部門(第1営業部)も閲覧可
+    # 閲覧・編集可に指定した第1営業部は閲覧可
     assert client.get(f"/projects?dept={dept1_id}").status_code == 200
-    # 自部門(第2営業部)の案件は編集可
+    # 所属(第2営業部)の案件は編集可
     assert client.get(f"/projects/{pid}/edit").status_code == 200
 
 
-def test_manager_cannot_edit_other_department_project(client, app):
-    # 第1営業部の案件を作って、第2営業部長(bucho)が編集不可を確認
+def test_manager_cannot_access_unassigned_dept(client, app):
+    # 名古屋営業所(dept3)は bucho の所属でも閲覧・編集可でもない → 閲覧不可
     with app.app_context():
-        dept1 = Department.query.filter_by(name="第1営業部").first()
-        p = Project(department_id=dept1.id, fiscal_period=59,
+        dept3_id = Department.query.filter_by(name="名古屋営業所").first().id
+    login(client, "bucho", "buchopass1")
+    assert client.get(f"/projects?dept={dept3_id}").status_code == 403
+
+
+def test_manager_cannot_edit_project_in_unassigned_dept(client, app):
+    # bucho がアクセスできない部門(名古屋営業所)の案件は編集不可
+    with app.app_context():
+        dept3 = Department.query.filter_by(name="名古屋営業所").first()
+        p = Project(department_id=dept3.id, fiscal_period=59,
                     accounting_month="2026-09", project_name="他部門案件")
         db.session.add(p)
         db.session.commit()

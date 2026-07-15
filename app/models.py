@@ -34,8 +34,17 @@ VALID_ROLES = (ROLE_SYSADMIN, ROLE_ADMIN, ROLE_USER)
 
 
 # ユーザーと部門の多対多（1ユーザーに複数部門を割り当て可能）
+# こちらは「所属部門」。担当者候補（department.members）を駆動する。
 user_departments = db.Table(
     "user_departments",
+    db.Column("user_id", db.String(64), db.ForeignKey("users.user_id"), primary_key=True),
+    db.Column("department_id", db.Integer, db.ForeignKey("departments.id"), primary_key=True),
+)
+
+# 部門長（管理者）の「閲覧・編集可能な部門」（所属とは別枠）。
+# ここに入れても department.members には含めない＝担当者候補に名前が出ない。
+user_manageable_departments = db.Table(
+    "user_manageable_departments",
     db.Column("user_id", db.String(64), db.ForeignKey("users.user_id"), primary_key=True),
     db.Column("department_id", db.Integer, db.ForeignKey("departments.id"), primary_key=True),
 )
@@ -59,11 +68,17 @@ class User(UserMixin, db.Model):
     must_change_password = db.Column(db.Boolean, nullable=False, default=True)
     created_at = db.Column(db.DateTime, nullable=False, default=_now)
 
-    # 所属部門（多対多）
+    # 所属部門（多対多）。担当者候補（department.members）を駆動する。
     departments = db.relationship(
         "Department", secondary=user_departments,
         order_by="Department.sort_order",
         backref=db.backref("members", order_by="User.user_id"),
+    )
+
+    # 閲覧・編集可能な部門（部門長のみ・所属とは別枠）。担当者候補には含めない。
+    manageable_departments = db.relationship(
+        "Department", secondary=user_manageable_departments,
+        order_by="Department.sort_order",
     )
 
     # ---- パスワード関連ヘルパー ----
@@ -101,32 +116,53 @@ class User(UserMixin, db.Model):
 
     @property
     def department_ids(self) -> set[int]:
+        """所属部門ID（担当者候補に名前が出る部門）。"""
         return {d.id for d in self.departments}
+
+    @property
+    def manageable_department_ids(self) -> set[int]:
+        """閲覧・編集可能部門ID（部門長のみ・所属とは別枠）。"""
+        return {d.id for d in self.manageable_departments}
+
+    @property
+    def admin_scope_ids(self) -> set[int]:
+        """管理者が閲覧・編集できる部門ID（所属 ∪ 閲覧編集部門）。"""
+        return self.department_ids | self.manageable_department_ids
 
     def viewable_departments(self):
         """閲覧できる部門の一覧（sort順）。
 
-        システム管理者・管理者は全部門、一般は自部門のみ。
+        システム管理者は全部門、管理者は「所属 ∪ 閲覧編集部門」、一般は自部門のみ。
         """
-        if self.role in (ROLE_SYSADMIN, ROLE_ADMIN):
+        if self.role == ROLE_SYSADMIN:
             return Department.query.filter_by(is_active=True) \
                 .order_by(Department.sort_order).all()
+        if self.role == ROLE_ADMIN:
+            depts = {d.id: d for d in self.departments if d.is_active}
+            depts.update({d.id: d for d in self.manageable_departments if d.is_active})
+            return sorted(depts.values(), key=lambda d: d.sort_order)
         return sorted(self.departments, key=lambda d: d.sort_order)
 
     def editable_departments(self):
         """『部門単位で』編集できる部門の一覧（販管費入力・部門の案件編集の判定に使う）。
 
-        システム管理者は全部門、管理者・一般は自部門のみ。
+        システム管理者は全部門、管理者は「所属 ∪ 閲覧編集部門」、一般は自部門のみ。
         （一般は部門単位の編集権は無いが、自部門として編集画面に入る起点に使う。）
         """
         if self.role == ROLE_SYSADMIN:
             return Department.query.filter_by(is_active=True) \
                 .order_by(Department.sort_order).all()
+        if self.role == ROLE_ADMIN:
+            depts = {d.id: d for d in self.departments if d.is_active}
+            depts.update({d.id: d for d in self.manageable_departments if d.is_active})
+            return sorted(depts.values(), key=lambda d: d.sort_order)
         return sorted(self.departments, key=lambda d: d.sort_order)
 
     def can_view_department(self, department_id: int) -> bool:
-        if self.role in (ROLE_SYSADMIN, ROLE_ADMIN):
+        if self.role == ROLE_SYSADMIN:
             return True
+        if self.role == ROLE_ADMIN:
+            return department_id in self.admin_scope_ids
         return department_id in self.department_ids
 
     def can_edit_department(self, department_id: int) -> bool:
@@ -134,7 +170,7 @@ class User(UserMixin, db.Model):
         if self.role == ROLE_SYSADMIN:
             return True
         if self.role == ROLE_ADMIN:
-            return department_id in self.department_ids
+            return department_id in self.admin_scope_ids
         return False
 
     def can_view_project(self, project) -> bool:
@@ -150,7 +186,7 @@ class User(UserMixin, db.Model):
         if self.role == ROLE_SYSADMIN:
             return True
         if self.role == ROLE_ADMIN:
-            return project.department_id in self.department_ids
+            return project.department_id in self.admin_scope_ids
         return project.assignee_user_id == self.user_id
 
     # ---- Flask-Login が要求するインターフェース ----
@@ -234,6 +270,21 @@ class Category(db.Model):
         return f"{self.code}（{self.name}）"
 
 
+class ProductCategory(db.Model):
+    """商品カテゴリのマスタ（GW-保守 など）。部門ごとに定義でき、システム管理者と
+    部門管理者（部門長）がカスタマイズできる。数字まとめで商品カテゴリ別の集計に使う。"""
+    __tablename__ = "product_categories"
+
+    id = db.Column(db.Integer, primary_key=True)
+    department_id = db.Column(db.Integer, db.ForeignKey("departments.id"), nullable=True)
+    name = db.Column(db.String(64), nullable=False)      # GW-保守 / 音声-保守 等
+    sort_order = db.Column(db.Integer, nullable=False, default=0)
+    is_active = db.Column(db.Boolean, nullable=False, default=True)
+
+    department = db.relationship("Department")
+    projects = db.relationship("Project", back_populates="product_category")
+
+
 class Project(db.Model):
     """案件。整数IDを主キーとし、部門・計上月ごとに集計する。
 
@@ -272,9 +323,15 @@ class Project(db.Model):
 
     # 表示順の項目
     assignee_user_id = db.Column(db.String(64), db.ForeignKey("users.user_id"), nullable=True)  # 担当者
+    # 担当者名のスナップショット（担当ユーザー削除後も氏名を残すため保存する）
+    assignee_name = db.Column(db.String(128), nullable=True)
     kubun_id = db.Column(db.Integer, db.ForeignKey("kubun.id"), nullable=True)                   # 区分
     category_id = db.Column(db.Integer, db.ForeignKey("categories.id"), nullable=True)           # カテゴリー
     project_name = db.Column(db.String(255), nullable=False)                                     # 案件名
+    client_name = db.Column(db.String(255), nullable=True)                                       # 取引先
+    end_user_name = db.Column(db.String(255), nullable=True)                                     # エンドユーザ
+    product_category_id = db.Column(db.Integer, db.ForeignKey("product_categories.id"),
+                                    nullable=True)                                               # 商品カテゴリ
     rank_id = db.Column(db.Integer, db.ForeignKey("ranks.id"), nullable=True)                    # 確度
     sales = db.Column(db.Integer, nullable=True)                                                 # 売上 円
     cost = db.Column(db.Integer, nullable=True)                                                  # 仕入 円
@@ -293,7 +350,15 @@ class Project(db.Model):
     assignee = db.relationship("User")
     kubun = db.relationship("Kubun", back_populates="projects")
     category = db.relationship("Category", back_populates="projects")
+    product_category = db.relationship("ProductCategory", back_populates="projects")
     rank = db.relationship("Rank", back_populates="projects")
+
+    @property
+    def assignee_display(self) -> str:
+        """担当者の表示名。存命ユーザーは氏名、削除済みはスナップショット名。"""
+        if self.assignee is not None:
+            return self.assignee.name
+        return self.assignee_name or ""
 
     @property
     def gross_profit(self) -> int:

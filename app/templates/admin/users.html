@@ -34,6 +34,14 @@
           {% else %}
             <span class="text-muted">—</span>
           {% endfor %}
+          {% if u.manageable_departments %}
+            <div style="margin-top:4px;">
+              <span class="text-muted" style="font-size:11px;">閲覧・編集可:</span>
+              {% for d in u.manageable_departments %}
+                <span class="badge badge-dept" style="opacity:.75;">{{ d.name }}</span>
+              {% endfor %}
+            </div>
+          {% endif %}
         </td>
         <td>
           {% if u.is_active %}
@@ -59,6 +67,11 @@
             <button type="submit" class="btn btn-sm {% if u.is_active %}btn-danger{% else %}btn-outline{% endif %}">
               {% if u.is_active %}無効化{% else %}有効化{% endif %}
             </button>
+          </form>
+          <form class="inline-form" method="post" action="{{ url_for('admin.delete_user', user_id=u.user_id) }}"
+                onsubmit="return confirm('{{ u.name }} を削除しますか？\n担当していた案件には担当者名だけが残ります。この操作は取り消せません。');">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-sm btn-danger">削除</button>
           </form>
           {% endif %}
         </td>

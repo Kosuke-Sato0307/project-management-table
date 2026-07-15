@@ -6,13 +6,10 @@
 {% if department %}
 <div class="card dept-bar">
   <label style="display:inline-block; margin-right:8px;">部門</label>
-  <select onchange="if(this.value){location.href=this.value;}"
-          style="max-width:280px; display:inline-block; width:auto;">
-    {% for d in viewable %}
-    <option value="{{ url_for(request.endpoint, dept=d.id, gran=g, period=period) }}"
-            {% if d.id == department.id %}selected{% endif %}>{{ d.name }}</option>
-    {% endfor %}
-  </select>
+  <span class="dept-name-tag">{{ department.name }}</span>
+  {% if viewable | length > 1 %}
+  <a class="btn btn-sm btn-outline" href="{{ url_for('main.select_department') }}" style="margin-left:6px;">切替</a>
+  {% endif %}
   <label style="display:inline-block; margin:0 8px 0 12px;">期</label>
   <select onchange="if(this.value){location.href=this.value;}"
           style="display:inline-block; width:auto;">
@@ -28,6 +25,7 @@
   <a class="tab {% if active_view == 'yojitsu' %}active{% endif %}"  href="{{ url_for('analytics.yojitsu', dept=department.id, period=period) }}">予実まとめ</a>
   <a class="tab {% if active_view == 'soneki' %}active{% endif %}"   href="{{ url_for('analytics.soneki', dept=department.id, period=period) }}">損益まとめ</a>
   <a class="tab {% if active_view == 'category' %}active{% endif %}" href="{{ url_for('analytics.category', dept=department.id, period=period) }}">カテゴリー別</a>
+  <a class="tab {% if active_view == 'product_category' %}active{% endif %}" href="{{ url_for('analytics.product_category', dept=department.id, period=period) }}">商品カテゴリ別</a>
   <a class="tab {% if active_view == 'rank' %}active{% endif %}"     href="{{ url_for('analytics.rank', dept=department.id, period=period) }}">確度別</a>
   <a class="tab {% if active_view == 'sga' %}active{% endif %}"      href="{{ url_for('analytics.sga', dept=department.id, period=period) }}">販管費入力</a>
 </div>

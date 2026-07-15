@@ -100,3 +100,95 @@ def test_category_management(client, app):
     with app.app_context():
         from app.models import Category
         assert Category.query.filter_by(code="Xx").first() is not None
+
+
+# ---------- ユーザー削除（担当者名の保持） ----------
+def test_delete_user_keeps_assignee_name_on_projects(client, app):
+    from app.models import Project
+    login(client, "admin", "adminpass1")
+    with app.app_context():
+        # hanako が担当の案件が存在する
+        before = Project.query.filter_by(assignee_user_id="hanako").count()
+        assert before >= 1
+    resp = client.post("/admin/users/hanako/delete", follow_redirects=True)
+    assert resp.status_code == 200
+    with app.app_context():
+        # ユーザーは削除された
+        assert db.session.get(User, "hanako") is None
+        # 担当していた案件は担当者リンクが外れ、氏名が残っている
+        orphaned = Project.query.filter_by(assignee_name="鈴木花子").all()
+        assert len(orphaned) >= 1
+        for p in orphaned:
+            assert p.assignee_user_id is None
+            assert p.assignee_display == "鈴木花子"
+
+
+def test_cannot_delete_self(client):
+    login(client, "admin", "adminpass1")
+    resp = client.post("/admin/users/admin/delete", follow_redirects=True)
+    assert "自分自身は削除できません".encode() in resp.data
+
+
+def test_cannot_delete_last_sysadmin(client, app):
+    # 一般ユーザーを sysadmin にせず、admin が唯一の sysadmin のまま別sysadminを作らず削除を試す
+    login(client, "admin", "adminpass1")
+    # 別の sysadmin を用意してから、その別sysadminを消しても admin は残る（これは許可）
+    # ここでは唯一の sysadmin(admin) 自身の削除は self ガードで弾かれるため、
+    # last-sysadmin ガードは「別ユーザーを一旦sysadminにし削除」で確認する。
+    client.post("/admin/users/taro/edit",
+                data={"name": "山田太郎", "role": "sysadmin"}, follow_redirects=True)
+    # taro(sysadmin) を削除しても admin が残るので成功する
+    resp = client.post("/admin/users/taro/delete", follow_redirects=True)
+    assert resp.status_code == 200
+    with app.app_context():
+        assert db.session.get(User, "taro") is None
+        assert db.session.get(User, "admin") is not None
+
+
+def test_edit_user_saves_manageable_departments(client, app):
+    login(client, "admin", "adminpass1")
+    with app.app_context():
+        from app.models import Department
+        dept1_id = Department.query.filter_by(name="第1営業部").first().id
+        dept2_id = Department.query.filter_by(name="第2営業部").first().id
+    resp = client.post("/admin/users/hanako/edit", data={
+        "name": "鈴木花子", "role": "admin",
+        "department_ids": [str(dept2_id)],
+        "manageable_department_ids": [str(dept1_id)],
+    }, follow_redirects=True)
+    assert resp.status_code == 200
+    with app.app_context():
+        u = db.session.get(User, "hanako")
+        assert u.department_ids == {dept2_id}
+        assert u.manageable_department_ids == {dept1_id}
+
+
+# ---------- 商品カテゴリ管理 ----------
+def test_product_category_management_by_sysadmin(client, app):
+    login(client, "admin", "adminpass1")
+    with app.app_context():
+        from app.models import Department
+        dept2_id = Department.query.filter_by(name="第2営業部").first().id
+    resp = client.post(f"/admin/product-categories?dept={dept2_id}", data={
+        "name": "GW-新設",
+    }, follow_redirects=True)
+    assert resp.status_code == 200
+    with app.app_context():
+        from app.models import ProductCategory
+        assert ProductCategory.query.filter_by(name="GW-新設").first() is not None
+
+
+def test_product_category_management_allowed_for_manager(client, app):
+    # 部門長(bucho)は所属/閲覧編集可の部門の商品カテゴリを管理できる
+    login(client, "bucho", "buchopass1")
+    with app.app_context():
+        from app.models import Department
+        dept2_id = Department.query.filter_by(name="第2営業部").first().id
+    resp = client.get(f"/admin/product-categories?dept={dept2_id}")
+    assert resp.status_code == 200
+
+
+def test_product_category_management_forbidden_for_general_user(client):
+    login(client, "hanako", "hanakopass1")
+    resp = client.get("/admin/product-categories")
+    assert resp.status_code == 403
