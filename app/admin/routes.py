@@ -6,12 +6,13 @@
 いずれもシステム管理者のみアクセス可能。
 """
 from flask import (Blueprint, render_template, request, redirect, url_for,
-                   flash)
+                   flash, abort)
 from flask_login import current_user
 
 from ..extensions import db
-from ..models import User, Department, Category, VALID_ROLES, ROLE_USER
-from ..decorators import sysadmin_required
+from ..models import (User, Department, Category, ProductCategory, Project,
+                      VALID_ROLES, ROLE_USER, ROLE_ADMIN)
+from ..decorators import sysadmin_required, admin_required
 
 admin_bp = Blueprint("admin", __name__, url_prefix="/admin")
 
@@ -19,9 +20,9 @@ admin_bp = Blueprint("admin", __name__, url_prefix="/admin")
 INITIAL_PASSWORD = "P@ssw0rd"
 
 
-def _selected_departments():
+def _selected_departments(field="department_ids"):
     """フォームから選択された部門ID群を有効な Department リストにして返す。"""
-    ids = request.form.getlist("department_ids", type=int)
+    ids = request.form.getlist(field, type=int)
     if not ids:
         return []
     return Department.query.filter(
@@ -61,6 +62,10 @@ def new_user():
                     is_active_flag=True, must_change_password=True)
         user.set_password(INITIAL_PASSWORD)
         user.departments = _selected_departments()
+        # 閲覧・編集可能部門は部門長（管理者）のみ意味を持つ
+        user.manageable_departments = (
+            _selected_departments("manageable_department_ids")
+            if role == ROLE_ADMIN else [])
         db.session.add(user)
         db.session.commit()
 
@@ -103,6 +108,9 @@ def edit_user(user_id):
         user.name = name
         user.role = role
         user.departments = _selected_departments()
+        user.manageable_departments = (
+            _selected_departments("manageable_department_ids")
+            if role == ROLE_ADMIN else [])
         db.session.commit()
         flash(f"'{user.name}' の情報を更新しました。", "success")
         return redirect(url_for("admin.users"))
@@ -142,6 +150,42 @@ def toggle_active(user_id):
     db.session.commit()
     state = "有効化" if user.is_active_flag else "無効化"
     flash(f"'{user.name}' を{state}しました。", "info")
+    return redirect(url_for("admin.users"))
+
+
+@admin_bp.route("/users/<user_id>/delete", methods=["POST"])
+@sysadmin_required
+def delete_user(user_id):
+    """ユーザーを削除する。担当していた案件は、担当者名だけを残して担当者リンクを外す。"""
+    user = db.session.get(User, user_id)
+    if user is None:
+        flash("対象ユーザーが見つかりません。", "danger")
+        return redirect(url_for("admin.users"))
+    if user.user_id == current_user.user_id:
+        flash("自分自身は削除できません。", "danger")
+        return redirect(url_for("admin.users"))
+    # 最後の有効なシステム管理者は削除しない安全策
+    if user.is_sysadmin:
+        others = User.query.filter_by(role="sysadmin", is_active_flag=True) \
+            .filter(User.user_id != user.user_id).count()
+        if others == 0:
+            flash("システム管理者が1人だけのため、削除できません。", "danger")
+            return redirect(url_for("admin.users"))
+
+    # 担当していた案件は氏名を残して担当者リンクを外す（過去の案件管理・期初計画で名前を保持）
+    assigned = Project.query.filter_by(assignee_user_id=user.user_id).all()
+    for p in assigned:
+        if not p.assignee_name:
+            p.assignee_name = user.name
+        p.assignee_user_id = None
+
+    name = user.name
+    user.departments = []
+    user.manageable_departments = []
+    db.session.delete(user)
+    db.session.commit()
+    flash(f"ユーザー '{name}'（{user_id}）を削除しました。"
+          f"担当していた案件には担当者名を残しています。", "info")
     return redirect(url_for("admin.users"))
 
 
@@ -192,3 +236,61 @@ def toggle_category(category_id):
     state = "有効化" if cat.is_active else "無効化"
     flash(f"カテゴリー '{cat.code}' を{state}しました。", "info")
     return redirect(url_for("admin.categories", dept=cat.department_id))
+
+
+# ---------- 商品カテゴリマスタ（部門別・システム管理者＋部門管理者） ----------
+def _product_category_departments():
+    """商品カテゴリを管理できる部門（sysadmin=全部門 / 管理者=編集可能部門）。"""
+    return current_user.editable_departments()
+
+
+@admin_bp.route("/product-categories", methods=["GET", "POST"])
+@admin_required
+def product_categories():
+    departments = _product_category_departments()
+    dept_id = request.values.get("dept", type=int)
+    department = None
+    if dept_id is not None:
+        department = next((d for d in departments if d.id == dept_id), None)
+        if department is None:
+            abort(403)
+    elif departments:
+        department = departments[0]
+
+    if request.method == "POST" and department is not None:
+        if not current_user.can_edit_department(department.id):
+            abort(403)
+        name = (request.form.get("name") or "").strip()
+        if not name:
+            flash("名称は必須です。", "danger")
+        else:
+            max_order = db.session.query(db.func.max(ProductCategory.sort_order)) \
+                .filter_by(department_id=department.id).scalar() or 0
+            db.session.add(ProductCategory(department_id=department.id, name=name,
+                                           sort_order=max_order + 1))
+            db.session.commit()
+            flash(f"商品カテゴリ '{name}' を追加しました。", "success")
+        return redirect(url_for("admin.product_categories", dept=department.id))
+
+    items = []
+    if department is not None:
+        items = ProductCategory.query.filter_by(department_id=department.id) \
+            .order_by(ProductCategory.sort_order).all()
+    return render_template("admin/product_categories.html", departments=departments,
+                           department=department, product_categories=items)
+
+
+@admin_bp.route("/product-categories/<int:pc_id>/toggle-active", methods=["POST"])
+@admin_required
+def toggle_product_category(pc_id):
+    pc = db.session.get(ProductCategory, pc_id)
+    if pc is None:
+        flash("対象の商品カテゴリが見つかりません。", "danger")
+        return redirect(url_for("admin.product_categories"))
+    if not current_user.can_edit_department(pc.department_id):
+        abort(403)
+    pc.is_active = not pc.is_active
+    db.session.commit()
+    state = "有効化" if pc.is_active else "無効化"
+    flash(f"商品カテゴリ '{pc.name}' を{state}しました。", "info")
+    return redirect(url_for("admin.product_categories", dept=pc.department_id))

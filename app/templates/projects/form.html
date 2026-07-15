@@ -26,7 +26,7 @@
 
     <div class="form-grid">
       <div class="form-group">
-        <label>計上月 <span class="text-danger">*</span></label>
+        <label>完成月 <span class="text-danger">*</span></label>
         <input type="month" name="accounting_month" required
                value="{% if form is not none %}{{ form.get('accounting_month','') }}{% elif project %}{{ project.accounting_month }}{% endif %}">
         <div class="help-text">カレンダーから年月を選択します。</div>
@@ -67,6 +67,32 @@
       <div class="form-group form-span2">
         <label>案件名 <span class="text-danger">*</span></label>
         <input type="text" name="project_name" value="{{ v('project_name') }}" required>
+      </div>
+      <div class="form-group">
+        <label>取引先</label>
+        <input type="text" name="client_name" value="{{ v('client_name') }}" list="client-list"
+               autocomplete="off" placeholder="過去の入力から選択・自由入力">
+        <datalist id="client-list">
+          {% for c in client_suggestions %}<option value="{{ c }}">{% endfor %}
+        </datalist>
+      </div>
+      <div class="form-group">
+        <label>エンドユーザ</label>
+        <input type="text" name="end_user_name" value="{{ v('end_user_name') }}" list="end-user-list"
+               autocomplete="off" placeholder="過去の入力から選択・自由入力">
+        <datalist id="end-user-list">
+          {% for e in end_user_suggestions %}<option value="{{ e }}">{% endfor %}
+        </datalist>
+      </div>
+      <div class="form-group">
+        <label>商品カテゴリ</label>
+        {% set cpc = fk('product_category_id') %}
+        <select name="product_category_id">
+          <option value="">（未設定）</option>
+          {% for pc in product_categories %}
+          <option value="{{ pc.id }}" {% if cpc|string == pc.id|string %}selected{% endif %}>{{ pc.name }}</option>
+          {% endfor %}
+        </select>
       </div>
       <div class="form-group">
         <label>確度</label>

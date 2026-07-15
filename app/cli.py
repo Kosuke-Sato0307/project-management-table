@@ -11,7 +11,7 @@ import click
 from flask import Flask
 
 from .extensions import db
-from .models import (User, Rank, Department, Kubun, Category,
+from .models import (User, Rank, Department, Kubun, Category, ProductCategory,
                      ROLE_SYSADMIN)
 
 
@@ -84,5 +84,17 @@ def register_cli(app: Flask) -> None:
                     db.session.add(Category(department_id=dept2.id, code=code,
                                             name=name, sort_order=i))
 
+            # 第2営業部の商品カテゴリ
+            dept2_product_categories = [
+                "GW-保守", "GW-運用", "GW-構築", "GW-販売", "音声-保守",
+                "マンション", "その他",
+            ]
+            for i, name in enumerate(dept2_product_categories):
+                exists = ProductCategory.query.filter_by(
+                    department_id=dept2.id, name=name).first()
+                if not exists:
+                    db.session.add(ProductCategory(department_id=dept2.id,
+                                                   name=name, sort_order=i))
+
         db.session.commit()
-        click.echo("マスタ（確度・区分・部門・カテゴリー）の初期値を投入しました。")
+        click.echo("マスタ（確度・区分・部門・カテゴリー・商品カテゴリ）の初期値を投入しました。")

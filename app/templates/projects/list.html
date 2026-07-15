@@ -8,8 +8,10 @@
     <a class="btn btn-outline btn-sm" href="{{ url_for('projects.export_csv', dept=department.id, type=plan_type, period=period) }}">CSV</a>
     <a class="btn btn-outline btn-sm" href="{{ url_for('projects.export_xlsx', dept=department.id, type=plan_type, period=period) }}">Excel</a>
     <a class="btn btn-outline btn-sm" href="{{ url_for('projects.export_pdf', dept=department.id, type=plan_type, period=period) }}">PDF</a>
-    {% if can_edit %}
+    {% if can_manage %}
     <a class="btn btn-outline btn-sm" href="{{ url_for('imports.upload_page', dept=department.id, type=plan_type, period=period) }}">インポート</a>
+    {% endif %}
+    {% if can_edit %}
     <a class="btn" href="{{ url_for('projects.new', dept=department.id, type=plan_type, period=period) }}">＋ 案件を登録</a>
     {% endif %}
   </div>
@@ -23,12 +25,12 @@
 <div class="card dept-bar">
   <form method="get" action="{{ url_for('projects.list_projects') }}">
     <input type="hidden" name="type" value="{{ plan_type }}">
+    <input type="hidden" name="dept" value="{{ department.id }}">
     <label style="display:inline-block; margin-right:8px;">部門</label>
-    <select name="dept" onchange="this.form.submit()" style="max-width:280px; display:inline-block; width:auto;">
-      {% for d in viewable %}
-      <option value="{{ d.id }}" {% if d.id == department.id %}selected{% endif %}>{{ d.name }}</option>
-      {% endfor %}
-    </select>
+    <span class="dept-name-tag">{{ department.name }}</span>
+    {% if viewable | length > 1 %}
+    <a class="btn btn-sm btn-outline" href="{{ url_for('main.select_department') }}" style="margin-left:6px;">切替</a>
+    {% endif %}
     <label style="display:inline-block; margin:0 8px 0 12px;">期</label>
     <select name="period" onchange="this.form.submit()" style="display:inline-block; width:auto;">
       {% for p in periods %}
@@ -46,7 +48,7 @@
   {% endfor %}
 </div>
 
-{% if plan_type != 'management' and can_edit %}
+{% if plan_type != 'management' and can_manage %}
 <div class="card copy-bar">
   <form method="post" action="{{ url_for('projects.copy_to_management', dept=department.id, period=period) }}"
         onsubmit="return confirm('{{ plan_type_labels[plan_type] }}の内容を案件管理へコピーします。\n案件管理の既存データ（この部門・{{ period }}期）は削除して置き換えられます。よろしいですか？');">
@@ -74,14 +76,16 @@
     <div class="table-wrap">
       <table class="table table-cases">
         <colgroup>
-          <col style="width:8%"><col style="width:6%"><col style="width:6%">
-          <col style="width:18%"><col style="width:4%"><col style="width:8%">
-          <col style="width:8%"><col style="width:9%"><col style="width:7%">
-          <col style="width:7%"><col style="width:12%"><col style="width:7%">
+          <col style="width:7%"><col style="width:5%"><col style="width:5%">
+          <col style="width:14%"><col style="width:9%"><col style="width:9%">
+          <col style="width:7%"><col style="width:4%"><col style="width:7%">
+          <col style="width:7%"><col style="width:8%"><col style="width:5%">
+          <col style="width:5%"><col style="width:8%"><col style="width:6%">
         </colgroup>
         <thead>
           <tr>
-            <th>担当者</th><th>区分</th><th>カテゴリー</th><th>案件名</th><th>確度</th>
+            <th>担当者</th><th>区分</th><th>カテゴリー</th><th>案件名</th>
+            <th>取引先</th><th>エンドユーザ</th><th>商品カテゴリ</th><th>確度</th>
             <th class="num-col">売上</th><th class="num-col">仕入</th><th class="num-col">売上総利益</th>
             <th class="num-col">見込み工数</th><th class="num-col">対応工数</th><th>備考</th><th>操作</th>
           </tr>
@@ -89,10 +93,13 @@
         <tbody>
           {% for p in g.cases %}
           <tr>
-            <td>{{ p.assignee.name if p.assignee else '' }}</td>
+            <td>{{ p.assignee_display }}</td>
             <td>{{ p.kubun.name if p.kubun else '' }}</td>
             <td>{{ p.category.code if p.category else '' }}</td>
             <td class="wrap-cell">{{ p.project_name }}</td>
+            <td class="wrap-cell">{{ p.client_name or '' }}</td>
+            <td class="wrap-cell">{{ p.end_user_name or '' }}</td>
+            <td>{{ p.product_category.name if p.product_category else '' }}</td>
             <td>{{ p.rank.name if p.rank else '' }}</td>
             <td class="num-col">{{ p.sales | yen }}</td>
             <td class="num-col">{{ p.cost | yen }}</td>

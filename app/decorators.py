@@ -1,7 +1,7 @@
 """共通デコレータ・部門スコープの解決ヘルパー。"""
 from functools import wraps
 
-from flask import abort, redirect, url_for, flash, request
+from flask import abort, redirect, url_for, flash, request, session
 from flask_login import current_user
 
 from .extensions import db
@@ -44,11 +44,17 @@ def password_change_guard(view):
     return wrapped
 
 
-def resolve_department(require_edit: bool = False):
-    """リクエストの ?dept=<id> から対象部門を決定して返す。
+SESSION_DEPARTMENT_KEY = "current_department_id"
 
-    - 指定が無ければ、閲覧可能な部門の先頭（既定部門）を使う。
-    - 閲覧権が無い部門を指定した場合は 403。
+
+def resolve_department(require_edit: bool = False):
+    """対象部門を決定して返す（ログイン後に選んだ部門をセッションで保持する方式）。
+
+    - `?dept=<id>` が明示された場合はそれを採用し、以降のセッション既定部門にする。
+    - 未指定なら、セッションに保持した部門（まだ閲覧可能なら）を使う。
+    - セッションも無い場合、閲覧可能な部門が1つだけなら自動選択、
+      複数あれば部門選択画面へ誘導する（要件: プルダウン廃止・ログイン後に部門を選ぶ）。
+    - 閲覧権が無い部門を指定した場合は 403、無効/存在しない部門は 404。
     - require_edit=True の場合、部門単位の編集権が無ければ 403。
     戻り値: (department, viewable_departments)
     閲覧可能な部門が1つも無い場合は (None, []) を返す。
@@ -56,16 +62,26 @@ def resolve_department(require_edit: bool = False):
     viewable = current_user.viewable_departments()
     if not viewable:
         return None, []
+    viewable_ids = {d.id for d in viewable}
 
     dept_id = request.args.get("dept", type=int)
-    if dept_id is None:
-        department = viewable[0]
-    else:
+    if dept_id is not None:
         if not current_user.can_view_department(dept_id):
             abort(403)
         department = db.session.get(Department, dept_id)
         if department is None or not department.is_active:
             abort(404)
+        session[SESSION_DEPARTMENT_KEY] = department.id
+    else:
+        sess_id = session.get(SESSION_DEPARTMENT_KEY)
+        if sess_id in viewable_ids:
+            department = db.session.get(Department, sess_id)
+        elif len(viewable) == 1:
+            department = viewable[0]
+            session[SESSION_DEPARTMENT_KEY] = department.id
+        else:
+            # 部門が未選択（複数候補）→ 選択画面へ
+            abort(redirect(url_for("main.select_department", next=request.full_path)))
 
     if require_edit and not current_user.can_edit_department(department.id):
         abort(403)

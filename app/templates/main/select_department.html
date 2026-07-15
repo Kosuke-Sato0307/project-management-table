@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}部門を選択 - 案件管理システム{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1>部門を選択</h1>
+</div>
+
+{% if not viewable %}
+<div class="card"><p class="text-muted">アクセスできる部門がありません。管理者に部門の割り当てを依頼してください。</p></div>
+{% else %}
+<div class="card">
+  <p class="text-muted">アクセスする部門を選んでください。選択した部門は次回以降も保持されます（上部の「部門切替」でいつでも変更できます）。</p>
+  <div class="dept-select-grid">
+    {% for d in viewable %}
+    <a class="btn btn-block dept-select-btn {% if current_id == d.id %}btn{% else %}btn-outline{% endif %}"
+       href="{{ url_for('main.select_department', dept=d.id, next=next_url) }}">
+      {{ d.name }}{% if current_id == d.id %} <span class="badge">現在</span>{% endif %}
+    </a>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+{% endblock %}

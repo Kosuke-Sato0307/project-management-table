@@ -101,10 +101,32 @@ def test_by_rank_all_projects(app):
         assert data["total"]["sales"] == 2300000
 
 
-def test_analytics_pages_load(client):
+def test_analytics_pages_load(client, app):
     from tests.conftest import login
     login(client, "admin", "adminpass1")
-    for path in ["/analytics/yojitsu", "/analytics/soneki?gran=quarter",
-                 "/analytics/category", "/analytics/rank", "/analytics/sga"]:
+    with app.app_context():
+        did = Department.query.filter_by(name="第2営業部").first().id
+    for path in [f"/analytics/yojitsu?dept={did}",
+                 f"/analytics/soneki?dept={did}&gran=quarter",
+                 f"/analytics/category?dept={did}",
+                 f"/analytics/product-category?dept={did}",
+                 f"/analytics/rank?dept={did}", f"/analytics/sga?dept={did}"]:
         resp = client.get(path)
         assert resp.status_code == 200, path
+
+
+def test_by_product_category(app):
+    with app.app_context():
+        from app.models import ProductCategory
+        dept, projects = _dept_and_projects(app)
+        pcs = ProductCategory.query.filter_by(department_id=dept.id).order_by(
+            ProductCategory.sort_order).all()
+        data = calc.by_product_category(pcs, projects)
+        rows = {r["name"]: r for r in data["rows"]}
+        # GW-保守: 計画案件A(initial) 100万 / 実績A'(○) 100万
+        assert rows["GW-保守"]["sales_plan"] == 1000000
+        assert rows["GW-保守"]["sales_actual"] == 1000000
+        # 音声-保守: 新規案件B(○) 50万（計画なし）
+        assert rows["音声-保守"]["sales_actual"] == 500000
+        assert rows["音声-保守"]["sales_plan"] == 0
+        assert data["total"]["sales_actual"] == 1500000

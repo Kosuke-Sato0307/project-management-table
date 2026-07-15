@@ -55,8 +55,32 @@ def create_app(config_object=Config) -> Flask:
 
     # テンプレートで使うフィルタ/関数
     _register_template_helpers(app)
+    _register_context_processors(app)
 
     return app
+
+
+def _register_context_processors(app: Flask) -> None:
+    from flask_login import current_user
+    from flask import session
+    from .decorators import SESSION_DEPARTMENT_KEY
+
+    @app.context_processor
+    def inject_department_nav():
+        """上部ナビの「現在部門」「部門切替」表示に使う情報を全テンプレートへ渡す。"""
+        current_department = None
+        can_switch = False
+        if getattr(current_user, "is_authenticated", False):
+            try:
+                viewable = current_user.viewable_departments()
+            except Exception:
+                viewable = []
+            can_switch = len(viewable) > 1
+            sess_id = session.get(SESSION_DEPARTMENT_KEY)
+            current_department = next(
+                (d for d in viewable if d.id == sess_id), None)
+        return {"nav_current_department": current_department,
+                "nav_can_switch": can_switch}
 
 
 def _register_template_helpers(app: Flask) -> None:

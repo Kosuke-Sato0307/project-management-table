@@ -235,6 +235,17 @@ td.num-col { font-variant-numeric: tabular-nums; }
   border: 1px solid var(--border-strong);
 }
 .dept-in-title { font-size: 16px; color: var(--muted); font-weight: 500; }
+.dept-name-tag {
+  display: inline-block; padding: 4px 12px; border-radius: 6px;
+  background: #eef5ff; color: var(--primary-dark); font-size: 14px; font-weight: 700;
+  border: 1px solid var(--border-strong);
+}
+.nav-dept { font-size: 13px; color: var(--muted); margin-right: 4px; }
+.nav-dept b { color: var(--primary-dark); }
+
+/* 部門選択画面のボタン一覧 */
+.dept-select-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-top: 8px; }
+.dept-select-btn { text-align: center; padding: 16px; font-size: 15px; }
 
 /* 権限バッジ（所属部門など） */
 .badge-dept { background: rgba(37,99,235,.10); color: var(--primary-dark); border: 1px solid var(--border-strong); margin-right: 4px; }

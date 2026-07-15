@@ -37,6 +37,21 @@
           </label>
           {% endfor %}
         </div>
+        <div class="help-text">案件管理の担当者候補には、ここで選んだ所属部門にのみ氏名が表示されます。</div>
+      </div>
+      <div class="form-group">
+        <label>閲覧・編集可能な部門（部門長のみ・別枠）</label>
+        <div class="checkbox-grid">
+          {% set manageable = user.manageable_department_ids %}
+          {% for d in departments %}
+          <label class="checkbox-item">
+            <input type="checkbox" name="manageable_department_ids" value="{{ d.id }}"
+                   {% if d.id in manageable %}checked{% endif %}>
+            {{ d.name }}
+          </label>
+          {% endfor %}
+        </div>
+        <div class="help-text">権限が「管理者」のときのみ有効です。所属部門とは別に、閲覧・編集できる部門を選べます（この部門の担当者候補には氏名は表示されません）。</div>
       </div>
       <button type="submit" class="btn btn-block">更新する</button>
     </form>

@@ -17,11 +17,20 @@
         <a href="{{ url_for('main.index') }}">ホーム</a>
         <a href="{{ url_for('projects.list_projects') }}">案件管理</a>
         <a href="{{ url_for('analytics.yojitsu') }}">数字まとめ</a>
+        {% if current_user.is_admin %}
+        <a href="{{ url_for('admin.product_categories') }}">商品カテゴリ管理</a>
+        {% endif %}
         {% if current_user.is_sysadmin %}
         <a href="{{ url_for('admin.users') }}">ユーザー管理</a>
         {% endif %}
       </nav>
       <div class="user-area">
+        {% if nav_current_department %}
+        <span class="nav-dept">部門: <b>{{ nav_current_department.name }}</b></span>
+        {% endif %}
+        {% if nav_can_switch %}
+        <a class="btn btn-sm btn-outline" href="{{ url_for('main.select_department') }}">部門切替</a>
+        {% endif %}
         <span class="user-name">{{ current_user.name }}
           {% if current_user.role != 'user' %}<span class="badge">{{ current_user.role_label }}</span>{% endif %}
         </span>

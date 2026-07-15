@@ -15,11 +15,14 @@ UNSET = "（未設定）"
 
 # 取込対象の列: (見出し, 属性名, 種別, 必須)
 IMPORT_COLUMNS = [
-    ("計上月", "accounting_month", "month", True),
+    ("完成月", "accounting_month", "month", True),
     ("担当者", "assignee_user_id", "assignee", False),
     ("区分", "kubun_id", "kubun", False),
     ("カテゴリー", "category_id", "category", False),
     ("案件名", "project_name", "text", True),
+    ("取引先", "client_name", "text", False),
+    ("エンドユーザ", "end_user_name", "text", False),
+    ("商品カテゴリ", "product_category_id", "product_category", False),
     ("確度", "rank_id", "rank", False),
     ("売上", "sales", "int", False),
     ("仕入", "cost", "int", False),
@@ -32,7 +35,9 @@ IMPORT_COLUMNS = [
 HEADER_ALIASES = {
     "カテゴリ": "カテゴリー",
     "担当": "担当者",
-    "完成月": "計上月",
+    "計上月": "完成月",
+    "エンドユーザー": "エンドユーザ",
+    "商品カテゴリー": "商品カテゴリ",
     "売上(円)": "売上",
     "仕入(円)": "仕入",
 }
@@ -44,6 +49,7 @@ DROPDOWN_HEADERS = {
     "担当者": "assignee",
     "区分": "kubun",
     "カテゴリー": "category",
+    "商品カテゴリ": "product_category",
     "確度": "rank",
 }
 
@@ -160,18 +166,21 @@ def parse_file(path, ext):
 
 
 # ---------- 検証 ----------
-def validate(headers, data_rows, member_map, kubun_map, category_map, rank_map):
+def validate(headers, data_rows, member_map, kubun_map, category_map, rank_map,
+             product_category_map=None):
     """全行を検証する（オールオアナッシング）。
 
-    member_map:   {氏名: user_id}      （その部門のメンバーのみ）
-    kubun_map:    {区分名: id}
-    category_map: {コード or 表示名: id} （その部門のカテゴリーのみ）
-    rank_map:     {確度名: id}
+    member_map:           {氏名: user_id}      （その部門のメンバーのみ）
+    kubun_map:            {区分名: id}
+    category_map:         {コード or 表示名: id} （その部門のカテゴリーのみ）
+    rank_map:             {確度名: id}
+    product_category_map: {商品カテゴリ名: id}  （その部門のみ）
 
     戻り値: (results, errors)
       results: list[RowResult]（エラーが無い場合のみ意味を持つ）
       errors:  list[str]（1件でもあれば取込中止）
     """
+    product_category_map = product_category_map or {}
     errors = []
 
     # 見出し→列インデックス
@@ -192,7 +201,8 @@ def validate(headers, data_rows, member_map, kubun_map, category_map, rank_map):
         return [], errors
 
     lookup = {"assignee": member_map, "kubun": kubun_map,
-              "category": category_map, "rank": rank_map}
+              "category": category_map, "rank": rank_map,
+              "product_category": product_category_map}
     label_of = {attr: h for h, attr, _, _ in IMPORT_COLUMNS}
     results = []
 
@@ -220,7 +230,8 @@ def validate(headers, data_rows, member_map, kubun_map, category_map, rank_map):
                     val = _to_float(raw)
                 elif kind == "month":
                     val = _to_month(raw)
-                elif kind in ("assignee", "kubun", "category", "rank"):
+                elif kind in ("assignee", "kubun", "category", "rank",
+                              "product_category"):
                     name = _to_text(raw) or None
                     if name is None or name == UNSET:
                         val = None
@@ -242,7 +253,7 @@ def validate(headers, data_rows, member_map, kubun_map, category_map, rank_map):
 
         # 必須値
         if not data.get("accounting_month"):
-            errors.append(f"{row_no}行目: 計上月が空です（例: 2026-09）。")
+            errors.append(f"{row_no}行目: 完成月が空です（例: 2026-09）。")
             row_ok = False
         if not data.get("project_name"):
             errors.append(f"{row_no}行目: 案件名が空です。")

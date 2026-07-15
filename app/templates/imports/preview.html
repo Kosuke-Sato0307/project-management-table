@@ -29,7 +29,7 @@
   <div class="table-wrap">
     <table class="table">
       <thead>
-        <tr><th>行</th><th>計上月</th><th>担当者</th><th>区分</th><th>カテゴリー</th><th>案件名</th><th>確度</th><th class="num-col">売上</th><th class="num-col">仕入</th></tr>
+        <tr><th>行</th><th>完成月</th><th>担当者</th><th>区分</th><th>カテゴリー</th><th>案件名</th><th>取引先</th><th>エンドユーザ</th><th>商品カテゴリ</th><th>確度</th><th class="num-col">売上</th><th class="num-col">仕入</th></tr>
       </thead>
       <tbody>
         {% for r in results %}
@@ -40,6 +40,9 @@
           <td>{{ r.data.kubun_id or '' }}</td>
           <td>{{ r.data.category_id or '' }}</td>
           <td>{{ r.data.project_name }}</td>
+          <td>{{ r.data.client_name or '' }}</td>
+          <td>{{ r.data.end_user_name or '' }}</td>
+          <td>{{ r.data.product_category_id or '' }}</td>
           <td>{{ r.data.rank_id or '' }}</td>
           <td class="num-col">{{ r.data.sales | yen }}</td>
           <td class="num-col">{{ r.data.cost | yen }}</td>
@@ -48,6 +51,6 @@
       </tbody>
     </table>
   </div>
-  <p class="help-text">※ 担当者・区分・カテゴリー・確度はID表示です（保存時に正しく紐づきます）。</p>
+  <p class="help-text">※ 担当者・区分・カテゴリー・商品カテゴリ・確度はID表示です（保存時に正しく紐づきます）。</p>
 {% endif %}
 {% endblock %}

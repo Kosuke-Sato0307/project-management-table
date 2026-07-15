@@ -4,8 +4,8 @@ import pytest
 from app import create_app
 from app.config import TestConfig
 from app.extensions import db
-from app.models import (User, Rank, Department, Kubun, Category, Project, Sga,
-                        ROLE_SYSADMIN, ROLE_ADMIN, ROLE_USER)
+from app.models import (User, Rank, Department, Kubun, Category, ProductCategory,
+                        Project, Sga, ROLE_SYSADMIN, ROLE_ADMIN, ROLE_USER)
 
 
 @pytest.fixture()
@@ -21,10 +21,11 @@ def app():
 
 def _seed():
     """3権限・2部門・マスタ・案件の最小データを用意する。"""
-    # 部門
+    # 部門（dept3 は bucho がアクセスできない部門として使う）
     dept2 = Department(name="第2営業部", sort_order=0)
     dept1 = Department(name="第1営業部", sort_order=1)
-    db.session.add_all([dept2, dept1])
+    dept3 = Department(name="名古屋営業所", sort_order=2)
+    db.session.add_all([dept2, dept1, dept3])
     db.session.flush()
 
     # 確度（○ が実績）
@@ -43,6 +44,12 @@ def _seed():
     cat_ri = Category(department=dept2, code="Ri", name="Ribbon Communications関連", sort_order=0)
     cat_or = Category(department=dept2, code="Or", name="Oracle関連", sort_order=1)
     db.session.add_all([cat_ri, cat_or])
+
+    # 商品カテゴリ（第2営業部）
+    pc_gw = ProductCategory(department=dept2, name="GW-保守", sort_order=0)
+    pc_voice = ProductCategory(department=dept2, name="音声-保守", sort_order=1)
+    pc_other = ProductCategory(department=dept2, name="その他", sort_order=2)
+    db.session.add_all([pc_gw, pc_voice, pc_other])
     db.session.flush()
 
     # ユーザー
@@ -52,7 +59,8 @@ def _seed():
     manager = User(user_id="bucho", name="部門長", role=ROLE_ADMIN,
                    is_active_flag=True, must_change_password=False)
     manager.set_password("buchopass1")
-    manager.departments = [dept2]
+    manager.departments = [dept2]           # 所属（担当者候補に名前が出る）
+    manager.manageable_departments = [dept1]  # 閲覧・編集可（別枠・候補に名前は出ない）
     taro = User(user_id="taro", name="山田太郎", role=ROLE_USER,
                 is_active_flag=True, must_change_password=True)
     taro.set_password("initpass12")
@@ -69,8 +77,9 @@ def _seed():
     # 計画案件A: 2026-09(1Q) 売上100万 仕入60万 -> 粗利40万
     db.session.add(Project(
         department_id=dept2.id, fiscal_period=59, plan_type=Project.PLAN_INITIAL,
-        accounting_month="2026-09", assignee_user_id="hanako", kubun_id=kplan.id,
-        category_id=cat_ri.id, rank_id=ranks["○"].id, project_name="計画案件A",
+        accounting_month="2026-09", assignee_user_id="hanako", assignee_name="鈴木花子",
+        kubun_id=kplan.id, category_id=cat_ri.id, product_category_id=pc_gw.id,
+        rank_id=ranks["○"].id, project_name="計画案件A",
         sales=1000000, cost=600000, estimated_hours=10, actual_hours=8))
     # ---- 中期計画（plan_type=midterm, 中期計画値）----
     # 中期案件M: 2026-09(1Q) 売上120万 仕入70万
@@ -83,14 +92,16 @@ def _seed():
     # 実績A'（期初計画から確定）: 2026-09(1Q) 確度○ 売上100万 仕入60万 -> 粗利40万
     db.session.add(Project(
         department_id=dept2.id, fiscal_period=59, plan_type=Project.PLAN_MANAGEMENT,
-        accounting_month="2026-09", assignee_user_id="hanako", kubun_id=kplan.id,
-        category_id=cat_ri.id, rank_id=ranks["○"].id, project_name="計画案件A",
+        accounting_month="2026-09", assignee_user_id="hanako", assignee_name="鈴木花子",
+        kubun_id=kplan.id, category_id=cat_ri.id, product_category_id=pc_gw.id,
+        rank_id=ranks["○"].id, project_name="計画案件A",
         sales=1000000, cost=600000, estimated_hours=10, actual_hours=8))
     # 新規案件B（○）: 売上50万 仕入20万 -> 粗利30万, 2026-12(=2Q)
     db.session.add(Project(
         department_id=dept2.id, fiscal_period=59, plan_type=Project.PLAN_MANAGEMENT,
-        accounting_month="2026-12", assignee_user_id="hanako", kubun_id=knew.id,
-        category_id=cat_or.id, rank_id=ranks["○"].id, project_name="新規案件B",
+        accounting_month="2026-12", assignee_user_id="hanako", assignee_name="鈴木花子",
+        kubun_id=knew.id, category_id=cat_or.id, product_category_id=pc_voice.id,
+        rank_id=ranks["○"].id, project_name="新規案件B",
         sales=500000, cost=200000))
     # 見込案件C（確度B・実績外）: 売上80万 仕入50万, 2027-03(=3Q)
     db.session.add(Project(

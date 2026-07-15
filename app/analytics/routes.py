@@ -12,7 +12,7 @@ from flask import (Blueprint, render_template, request, redirect, url_for,
 from flask_login import login_required, current_user
 
 from ..extensions import db
-from ..models import Project, Rank, Category, Sga
+from ..models import Project, Rank, Category, ProductCategory, Sga
 from ..decorators import password_change_guard, resolve_department, resolve_period
 from .. import fiscal
 from . import calc
@@ -104,6 +104,21 @@ def category():
     ).order_by(Category.sort_order).all()
     data = calc.by_category(categories, projects)
     return render_template("analytics/category.html", data=data, **ctx)
+
+
+@analytics_bp.route("/product-category")
+@login_required
+@password_change_guard
+def product_category():
+    department, ctx = _common("product_category")
+    if department is None:
+        return render_template("analytics/empty.html", **ctx)
+    projects = _load_projects(department, ctx["period"])
+    product_categories = ProductCategory.query.filter_by(
+        department_id=department.id, is_active=True
+    ).order_by(ProductCategory.sort_order).all()
+    data = calc.by_product_category(product_categories, projects)
+    return render_template("analytics/product_category.html", data=data, **ctx)
 
 
 @analytics_bp.route("/rank")
